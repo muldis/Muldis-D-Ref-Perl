@@ -127,7 +127,7 @@ Process streaming Muldis D source code from characters to tokens
     use Muldis::D::RefEng::StreamLexer;
 
     my $stream_lexer = Muldis::D::RefEng::StreamLexer->new({
-        char_stream => \*STDIN, max_frag_len => 50 });
+        char_stream => \*STDIN, max_frag_len => 150 });
 
     while (my $token = $stream_lexer->pull_token_or_fragment())
     {
@@ -159,7 +159,7 @@ is quite short (such as for an operator name or numeric literal), but
 sometimes it returns tokens in fragments instead, such as because the whole
 token would be quite long (such as for some Text or Blob literals) and we
 wish to preserve working memory, either for performance or for security,
-or protection against malformed input (such as an unterminated Text/Blob).
+or protection against malformed input (such as an unterminated string).
 
 Each returned token or fragment carries presently just 1 piece of metadata,
 which is a Boolean, that is False iff what was returned is either a whole
@@ -174,6 +174,10 @@ configured size, but that as a special case, if the token contains any
 line-ending characters such as C<\n> or C<\r> then it will be split
 immediately following those, so that this module's user can more easily
 report debugging information in terms of source code line numbers.
+
+And so, if C<max_frag_len> is set to be larger than all source code lines,
+then the only fragmentation that will occur is when any delimited strings
+or comments wrap around to multiple source lines; hence the default of 100.
 
 =head1 AUTHOR
 
