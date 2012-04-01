@@ -126,7 +126,8 @@ Process streaming Muldis D source code from characters to tokens
 
     use Muldis::D::RefEng::StreamLexer;
 
-    my $stream_lexer = Muldis::D::RefEng::StreamLexer->new( \*STDIN, 50 );
+    my $stream_lexer = Muldis::D::RefEng::StreamLexer->new({
+        char_stream => \*STDIN, max_frag_len => 50 });
 
     while (my $token = $stream_lexer->pull_token_or_fragment())
     {
@@ -146,12 +147,33 @@ In the future, this module will be updated to support other kinds of input.
 
 This module just splits up Muldis D source code strings into substrings,
 and it does not add or remove or substitute any characters; if the returned
-substrings were simply printed to an output filehandle, the output stream
-should be identical to the input.
+substrings were simply printed to an output filehandle in the same order,
+the output stream/file should be identical to the input.
 
 This module is used internally by L<Muldis::D::RefEng>, such that it serves
 as a helper for L<Muldis::D::RefEng::StreamParser>, which assigns more
 semantic metadata to the tokens and normalizes them.
+
+This module generally returns whole tokens at once, as typically each one
+is quite short (such as for an operator name or numeric literal), but
+sometimes it returns tokens in fragments instead, such as because the whole
+token would be quite long (such as for some Text or Blob literals) and we
+wish to preserve working memory, either for performance or for security,
+or protection against malformed input (such as an unterminated Text/Blob).
+
+Each returned token or fragment carries presently just 1 piece of metadata,
+which is a Boolean, that is False iff what was returned is either a whole
+token or the last piece of a fragmented one, and True iff what was returned
+is the first or middle fragment of a token being returned not all at once.
+
+The C<max_frag_len> optional configuration parameter lets you tune the
+maximum size of each fragment in characters to wherever it might be optimal
+for performance or debugging; it defaults to 100 and must be at least 10 if
+given.  By default, longer tokens will be split into fragments of the
+configured size, but that as a special case, if the token contains any
+line-ending characters such as C<\n> or C<\r> then it will be split
+immediately following those, so that this module's user can more easily
+report debugging information in terms of source code line numbers.
 
 =head1 AUTHOR
 
