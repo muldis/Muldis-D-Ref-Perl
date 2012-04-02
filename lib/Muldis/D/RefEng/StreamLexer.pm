@@ -1,4 +1,4 @@
-use 5.008003;
+use 5.008001;
 use utf8;
 use strict;
 use warnings FATAL => 'all';
@@ -16,14 +16,24 @@ my $DEF_TOKEN_FRAG_LEN = 100;  # in characters
     our $VERSION = '0.000000';
 
     # ATTRIBUTE LIST:
-        # char_stream : A filehandle open for reading, we pull chars from.
-        # lookahead : Str : Any extra chars we pulled from char_stream
-            # for lookahead that aren't part of the current token/fragment.
         # max_frag_len : Int : Max length for an output token or fragment.
+        # char_stream : A filehandle open for reading, we pull chars from.
+        # char_stream_buf : Str : Any chars we pulled from char_stream that
+            # weren't yet output as a token or fragment; these are
+            # conceptually un-pulled chars but we're using them to
+            # to effectively look ahead into the source stream.
+            # We sometimes use char_stream_buf as active working memory.
+        # src_line_num : Int : This is the text line number, relative to
+            # the first char to be read from char_stream by this
+            # StreamLexer object, of the first character of char_stream_buf
+            # now or to come next from char_stream; the first line is zero.
+        # src_line_char_num : Int : Within the context of src_line_num,
+            # this is the character number on that line of char_stream_buf
+            # or char_stream; the first char is zero.
         # is_mid_token : Bool : True iff we have yet to output the last
             # fragment of a token that we already output a fragment of.
 
-    use autodie;
+    use autodie qw(:all);
     use Carp;
     use Scalar::Util 'openhandle';
 
@@ -58,10 +68,12 @@ sub new
         # If any input isn't valid UTF-8, we expect that the above has
         # been silently replaced with sentinel chars (codepoint 0xFFFD).
 
-    $self->{char_stream}  = $char_stream;
-    $self->{lookahead}    = q{};
-    $self->{max_frag_len} = $max_frag_len;
-    $self->{is_mid_token} = 0;
+    $self->{max_frag_len}      = $max_frag_len;
+    $self->{char_stream}       = $char_stream;
+    $self->{char_stream_buf}   = do { my $csb = q{}; \$csb; };
+    $self->{src_line_num}      = 0;
+    $self->{src_line_char_num} = 0;
+    $self->{is_mid_token}      = 0;
 
     return $self;
 }
@@ -73,34 +85,22 @@ sub pull_token_or_fragment
     my ($self) = @_;
     my $payload = $self->{is_mid_token} ? $self->_continue_token()
         : $self->_start_token();
-    return [$self->{is_mid_token}, $payload];
-        # Result's first part is a flag that is True iff our caller should
-        # expect more fragments of the token in the result, and it is False
-        # iff our caller now has all the fragments, or the token is whole.
+    return {
+        chars             => $payload,
+        src_line_num      => 'TODO',
+        src_line_char_num => 'TODO',
+        is_mid_token      => $self->{is_mid_token},
+    };
 }
 
 ###########################################################################
 
-sub _pull_char
-{
-    return $_[0]->_pull_n_chars(1);
-}
-
-sub _pull_n_chars
+sub _pull_n_chars_append_into_buffer
 {
     my ($self, $cnt) = @_;
     # We expect $cnt is >= 1.
-    if ($cnt <= length $self->{lookahead})
-    {
-        return substr $self->{lookahead}, 0, $cnt, q{};
-    }
-    else
-    {
-        my $lookahead = $self->{lookahead};
-        $self->{lookahead} = q{};
-        read $self->{char_stream}, my $buffer, ($cnt - length $lookahead);
-        return $lookahead . $buffer;
-    }
+    my $csb_ref = $self->{char_stream_buf};
+    read $self->{char_stream}, $$csb_ref, $cnt, length $$csb_ref;
 }
 
 ###########################################################################
@@ -131,7 +131,8 @@ Process streaming Muldis D source code from characters to tokens
 
     while (my $token = $stream_lexer->pull_token_or_fragment())
     {
-        my ($is_mid_token, $token_chars) = @{$token};
+        my ($chars, $is_mid_token) = @{$token}{'chars', 'is_mid_token'};
+        # And do work with $token.
     }
 
 =head1 DESCRIPTION
@@ -161,10 +162,30 @@ token would be quite long (such as for some Text or Blob literals) and we
 wish to preserve working memory, either for performance or for security,
 or protection against malformed input (such as an unterminated string).
 
-Each returned token or fragment carries presently just 1 piece of metadata,
-which is a Boolean, that is False iff what was returned is either a whole
+Each returned token or fragment carries several pieces of metadata:
+
+=over *
+
+=item
+
+C<src_line_num> - An integer that is the text line number, relative to the
+first char to be read from C<char_stream> by this StreamLexer object, of
+the first character of C<char>; the first line is numbered zero.
+
+=item
+
+C<src_line_char_num> - An integer that is the character number, within the
+context of C<src_line_num>, on that line of C<char_stream>; the first
+character is numbered zero.
+
+=item
+
+C<is_mid_token> - A Boolean,
+that is False iff what was returned is either a whole
 token or the last piece of a fragmented one, and True iff what was returned
 is the first or middle fragment of a token being returned not all at once.
+
+=back
 
 The C<max_frag_len> optional configuration parameter lets you tune the
 maximum size of each fragment in characters to wherever it might be optimal
@@ -178,6 +199,15 @@ report debugging information in terms of source code line numbers.
 And so, if C<max_frag_len> is set to be larger than all source code lines,
 then the only fragmentation that will occur is when any delimited strings
 or comments wrap around to multiple source lines; hence the default of 100.
+
+=head1 DEPENDENCIES
+
+This file requires any version of Perl 5.x.y that is at least 5.8.1, and
+recommends one that is at least 5.14.2.
+
+It also requires these Perl 5 packages that are bundled with at least the
+latest production version of Perl 5, or are otherwise available on CPAN for
+older supported Perl 5 versions: L<autodie>, L<Carp>, L<Scalar::Util>.
 
 =head1 AUTHOR
 
