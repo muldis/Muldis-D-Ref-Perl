@@ -203,7 +203,7 @@ or comments wrap around to multiple source lines; hence the default of 100.
 =head1 DEPENDENCIES
 
 This file requires any version of Perl 5.x.y that is at least 5.8.1, and
-recommends one that is at least 5.14.2.
+recommends one that is at least 5.16.2.
 
 It also requires these Perl 5 packages that are bundled with at least the
 latest production version of Perl 5, or are otherwise available on CPAN for
@@ -215,6 +215,6 @@ Darren Duncan - darren@DarrenDuncan.net
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright © 2011-2012, Muldis Data Systems, Inc.
+Copyright © 2011-2013, Muldis Data Systems, Inc.
 
 =cut
