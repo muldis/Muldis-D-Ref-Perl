@@ -23,13 +23,6 @@ my $DEF_TOKEN_FRAG_LEN = 100;  # in characters
             # conceptually un-pulled chars but we're using them to
             # to effectively look ahead into the source stream.
             # We sometimes use char_stream_buf as active working memory.
-        # src_line_num : Int : This is the text line number, relative to
-            # the first char to be read from char_stream by this
-            # StreamLexer object, of the first character of char_stream_buf
-            # now or to come next from char_stream; the first line is zero.
-        # src_line_char_num : Int : Within the context of src_line_num,
-            # this is the character number on that line of char_stream_buf
-            # or char_stream; the first char is zero.
         # is_mid_token : Bool : True iff we have yet to output the last
             # fragment of a token that we already output a fragment of.
 
@@ -68,12 +61,10 @@ sub new
         # If any input isn't valid UTF-8, we expect that the above has
         # been silently replaced with sentinel chars (codepoint 0xFFFD).
 
-    $self->{max_frag_len}      = $max_frag_len;
-    $self->{char_stream}       = $char_stream;
-    $self->{char_stream_buf}   = do { my $csb = q{}; \$csb; };
-    $self->{src_line_num}      = 0;
-    $self->{src_line_char_num} = 0;
-    $self->{is_mid_token}      = 0;
+    $self->{max_frag_len}    = $max_frag_len;
+    $self->{char_stream}     = $char_stream;
+    $self->{char_stream_buf} = do { my $csb = q{}; \$csb; };
+    $self->{is_mid_token}    = 0;
 
     return $self;
 }
@@ -86,10 +77,8 @@ sub pull_token_or_fragment
     my $payload = $self->{is_mid_token} ? $self->_continue_token()
         : $self->_start_token();
     return {
-        chars             => $payload,
-        src_line_num      => 'TODO',
-        src_line_char_num => 'TODO',
-        is_mid_token      => $self->{is_mid_token},
+        chars        => $payload,
+        is_mid_token => $self->{is_mid_token},
     };
 }
 
@@ -165,18 +154,6 @@ or protection against malformed input (such as an unterminated string).
 Each returned token or fragment carries several pieces of metadata:
 
 =over *
-
-=item
-
-C<src_line_num> - An integer that is the text line number, relative to the
-first char to be read from C<char_stream> by this StreamLexer object, of
-the first character of C<char>; the first line is numbered zero.
-
-=item
-
-C<src_line_char_num> - An integer that is the character number, within the
-context of C<src_line_num>, on that line of C<char_stream>; the first
-character is numbered zero.
 
 =item
 
