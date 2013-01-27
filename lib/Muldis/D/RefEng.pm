@@ -13,6 +13,6 @@ Darren Duncan - darren@DarrenDuncan.net
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright © 2011, Muldis Data Systems, Inc.
+Copyright © 2011-2013, Muldis Data Systems, Inc.
 
 =cut

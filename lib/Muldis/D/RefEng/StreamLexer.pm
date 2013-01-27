@@ -3,6 +3,8 @@ use utf8;
 use strict;
 use warnings FATAL => 'all';
 
+use Muldis::D::RefEng::StreamDecoder 0.000000;
+
 ###########################################################################
 ###########################################################################
 
@@ -32,7 +34,6 @@ my $DEF_TOKEN_FRAG_LEN = 100;  # in characters
 
     use autodie qw(:all);
     use Carp;
-    use Scalar::Util 'openhandle';
 
 ###########################################################################
 
@@ -45,7 +46,7 @@ sub new
 
     confess ((caller(0))[3]).q{(): Bad :$char_stream arg;}
             . q{ it must be an open filehandle.}
-        if not (ref $char_stream eq 'GLOB' and openhandle $char_stream);
+        if not (ref $char_stream eq 'GLOB' and xxx $char_stream);
         # We can add support for IO::Handle and other input kinds later.
 
     if (!defined $max_frag_len)
@@ -147,7 +148,8 @@ Process streaming Muldis D source code from characters to tokens
     use Muldis::D::RefEng::StreamLexer;
 
     my $stream_lexer = Muldis::D::RefEng::StreamLexer->new({
-        char_stream => \*STDIN, max_frag_len => 150 });
+        char_stream => Muldis::D::RefEng::StreamDecoder->new({
+        raw_stream => \*STDIN }), max_frag_len => 150 });
 
     while (my $token = $stream_lexer->pull_token_or_fragment())
     {
@@ -345,7 +347,11 @@ recommends one that is at least 5.16.2.
 
 It also requires these Perl 5 packages that are bundled with at least the
 latest production version of Perl 5, or are otherwise available on CPAN for
-older supported Perl 5 versions: L<autodie>, L<Carp>, L<Scalar::Util>.
+older supported Perl 5 versions: L<autodie>, L<Carp>.
+
+It also requires these Perl 5 packages that are in the current
+distribution:
+L<Muldis::D::RefEng::StreamDecoder-ver(0.0.0..*)|Muldis::D::RefEng::StreamDecoder>.
 
 =head1 AUTHOR
 
