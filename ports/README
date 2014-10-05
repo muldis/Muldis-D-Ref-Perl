@@ -1,0 +1,22 @@
+The ports subdirectories each contain a port of the Reference Implementation of Muldis D into other languages besides Perl 5.
+
+When any of these is sufficiently complete, it will be pulled out into a separate repository.
+
+Since Muldis D is largely self-defined, the amount of host language implementation that must be written manually is relatively small.  The initial focus is on the parser, to help shake out the language syntax, and the compiler/runtime will follow later.
+
+While priorities are subject to change, ports will probably occur in the following order:
+
+- Python 3
+- Ruby
+- Java
+- PHP 5
+- C#
+- Perl 6
+- NQP (Not Quite Perl)
+- JavaScript
+- C
+
+A key requirement for an easy port is the language needs to support runtime compilation and execution of itself, like with Perl's "eval", and passing
+routines by reference like higher-order functions or Perl's code-refs.
+
+Some functional or newer popular languages will likely follow.
