@@ -1,3 +1,24 @@
+use 5.008001;
+use utf8;
+use strict;
+use warnings FATAL => 'all';
+
+###########################################################################
+###########################################################################
+
+{ package Muldis::D::RefEng; # package
+    BEGIN {
+        our $VERSION = '0.000000';
+        $VERSION = eval $VERSION;
+    }
+} # package Muldis::D::RefEng
+
+###########################################################################
+###########################################################################
+
+1; # Magic true value required at end of a reusable file's code.
+__END__
+
 =pod
 
 =encoding utf8

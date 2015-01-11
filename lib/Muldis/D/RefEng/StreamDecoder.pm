@@ -7,7 +7,10 @@ use warnings FATAL => 'all';
 ###########################################################################
 
 { package Muldis::D::RefEng::StreamDecoder; # class
-    our $VERSION = '0.000000';
+    BEGIN {
+        our $VERSION = '0.000000';
+        $VERSION = eval $VERSION;
+    }
 
     # ATTRIBUTE LIST:
         # raw_stream : A filehandle open for reading, we pull input from.

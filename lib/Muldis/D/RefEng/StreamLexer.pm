@@ -15,7 +15,10 @@ my $DEF_TOKEN_FRAG_LEN = 100;  # in characters
 ###########################################################################
 
 { package Muldis::D::RefEng::StreamLexer; # class
-    our $VERSION = '0.000000';
+    BEGIN {
+        our $VERSION = '0.000000';
+        $VERSION = eval $VERSION;
+    }
 
     # ATTRIBUTE LIST:
         # max_frag_len : Int : Max length for an output token or fragment.
