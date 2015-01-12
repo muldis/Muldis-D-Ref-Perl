@@ -62,32 +62,50 @@ use Math::BigInt try => 'GMP';
         # [A-Z][a-z]+__[A-Za-z0-9_]+() : Muldis D rtns, take+return ::Value
 
     # Internal identifiers of each value struct attribute if it exists.
-        my $VSA_S_KIND = 0;  # value struct kind, aka $k; determines other attrs
+        my $VSA_S_KIND = 'k';  # value struct kind, aka $k; determines further attrs
         # Valid $s{$MSA_S_KIND} aka $k values:
-            my $S_KIND_BOOL  = 0;  # value of type Boolean
-            my $S_KIND_INT   = 1;  # value of type Integer
-            my $S_KIND_ARRAY = 2;  # value of type Array
-            my $S_KIND_STR   = 3;  # value of type String
-            my $S_KIND_DICT  = 4;  # value of type Dictionary
-            my $S_KIND_TUPLE = 5;  # value of type Tuple
-            my $S_KIND_CPSL  = 6;  # value of type Capsule
-            my $S_KIND_IDENT = 7;  # value of type Identifier
-        my $VSA_BOOL_AS_SV = 1;  # Perl native boolean if exists; (1==0) or (1==1)
-        my $VSA_INT_AS_SV  = 1;  # Perl native integer if exists (IV and/or SV)
-        my $VSA_INT_AS_BIG = 2;  # Math::BigInt object if exists
-        my $VSA_ARRAY_AS_AV = 1;  # Perl arrayref of ::Value objects with $k in 0..7
-        my $VSA_STR_AS_SV = 1;  # Perl native string if exists (either octet or character?)
-        # my $VSA_STR_AS_AV = 2;  # Perl arrayref if exists of Perl native integer
-        my $VSA_DICT_C_TODO = 1;  # TODO, list of components when type is a Dict, eg form of a B+tree or something
-        my $VSA_TUPLE_AS_HV = 1;  # Perl hashref if exists where keys are Perl native strings and values are ::Value objects with $k in 0..7
-        # my $VSA_TUPLE_AS_AV = 2;  # Perl arrayref if exists of arrayrefs; like the HV but keys are Perl arrayrefs of integers
+            my $S_KIND_BOOL  = 'b';  # value of type Boolean
+            my $S_KIND_INT   = 'i';  # value of type Integer
+            my $S_KIND_ARRAY = 'a';  # value of type Array
+            my $S_KIND_STR   = 's';  # value of type String
+            my $S_KIND_DICT  = 'd';  # value of type Dictionary
+            my $S_KIND_TUPLE = 't';  # value of type Tuple
+            my $S_KIND_CPSL  = 'c';  # value of type Capsule
+            my $S_KIND_IDENT = 'e';  # value of type Identifier
+        my $VSA_WHICH = 'which';  # Perl native string/SV if exists,
+            # or Perl arrayref of said string or arrayref,
+            # for use when indexing this value by its default method,
+            # such as for use as a Dict key particularly if a B+tree/etc;
+            # for hashref key flatten any array in order appropriately;
+            # is canonical format identity between all values of same $k;
+            # (externally) prepend $k to arrayref for identity across all ::Value;
+            # some type-specific attrs may alias to this if appropriate
+        my $VSA_BOOL_AS_SV = 'which';  # Perl native boolean if exists; (1==0) or (1==1)
+        my $VSA_INT_AS_SV  = 'which';  # Perl native integer if exists (IV and/or SV)
+        my $VSA_INT_AS_BIG = 'bigint';  # Math::BigInt object if exists
+        my $VSA_ARRAY_AS_AV = 'av';  # Perl arrayref of ::Value objects
+        my $VSA_STR_AS_SV = 'which';  # Perl native string if exists (either octet or character?)
+        # my $VSA_STR_AS_AV = 'av';  # Perl arrayref if exists of Perl native integer
+        my $VSA_DICT_C_TODO = 1;  # ? TODO, list of components when type is a Dict, eg form of a B+tree or something
+        my $VSA_DICT_C_ELEMS = 2;  # ? Perl arrayref of ::Value objects
+        my $VSA_DICT_C_INDEXES = 3;  # ? Perl hashref of ::Value objects
+            # users of Dict typically provide each elem as a triple of
+            # {index str/aref, dict key ::Value, dict value ::Value}
+            # within the context of naming an index to use;
+            # if they just give {dkey,dvalue} then key's WHICH as well as
+            # Dict's internal identity index is used instead;
+            # they could also indicate multiple named indexes per value,
+            # particularly if the Dict is implementing a Relation;
+            # or more indexes could be added ad-hoc to a Dict ::Value later;
+            # ? see also how Set::Relation works ...
+        my $VSA_TUPLE_AS_HV = 'hv';  # Perl hashref if exists where keys are Perl native strings and values are ::Value objects with $k in 0..7
+        # my $VSA_TUPLE_AS_AV = 'av';  # Perl arrayref if exists of arrayrefs; like the HV but keys are Perl arrayrefs of integers
         my $VSA_CPSL_C_TYPE  = 1;  # ::Value object of type Identifier
         my $VSA_CPSL_C_ATTRS = 2;  # ::Value object of type Tuple
         my $VSA_IDENT_C_PKG_NAME_BASE       = 1;  # ::Value object of type Array of type String
         my $VSA_IDENT_C_PKG_NAME_EXT        = 2;  # ::Value object of type Array of type String
         my $VSA_IDENT_C_REL_STARTS_N_LEV_UP = 3;  # ::Value object of type Integer (nonnegative)
         my $VSA_IDENT_C_PATH_BENEATH_PKG    = 4;  # ::Value object of type Array of type String
-        my $VSA_IDENT_WHICH                 = 5;  # Perl native string if exists serializing the 4 components for use as hash key or fast use
 
     # ATTRIBUTE LIST OF ::LowLevel OBJECTS:
         # TODO
