@@ -83,9 +83,11 @@ use Math::BigInt try => 'GMP';
         my $VSA_BOOL_AS_SV = 'which';  # Perl native boolean if exists; (1==0) or (1==1)
         my $VSA_INT_AS_SV  = 'which';  # Perl native integer if exists (IV and/or SV)
         my $VSA_INT_AS_BIG = 'bigint';  # Math::BigInt object if exists
-        my $VSA_ARRAY_AS_AV = 'av';  # Perl arrayref of ::Value objects
-        my $VSA_STR_AS_SV = 'which';  # Perl native string if exists (either octet or character?)
-        # my $VSA_STR_AS_AV = 'av';  # Perl arrayref if exists of Perl native integer
+        my $VSA_ARRAY_AS_AV = 'av';  # Perl arrayref if exists of ::Value objects
+        my $VSA_STR_AS_SV = 'which';  # Perl native string if exists, either octet or char,
+            # while API to take Muldis D String as Array of Integer exists,
+            # internally always stored as native Perl string,
+            # hence String elements outside Perl's said range not supported
         my $VSA_DICT_C_TODO = 1;  # ? TODO, list of components when type is a Dict, eg form of a B+tree or something
         my $VSA_DICT_C_ELEMS = 2;  # ? Perl arrayref of ::Value objects
         my $VSA_DICT_C_INDEXES = 3;  # ? Perl hashref of ::Value objects
@@ -98,8 +100,8 @@ use Math::BigInt try => 'GMP';
             # particularly if the Dict is implementing a Relation;
             # or more indexes could be added ad-hoc to a Dict ::Value later;
             # ? see also how Set::Relation works ...
-        my $VSA_TUPLE_AS_HV = 'hv';  # Perl hashref if exists where keys are Perl native strings and values are ::Value objects with $k in 0..7
-        # my $VSA_TUPLE_AS_AV = 'av';  # Perl arrayref if exists of arrayrefs; like the HV but keys are Perl arrayrefs of integers
+        my $VSA_TUPLE_AS_HV = 'hv';  # Perl hashref if exists of ::Value objects,
+            # note about String limitations affects Tuple attr names also
         my $VSA_CPSL_C_TYPE  = 1;  # ::Value object of type Identifier
         my $VSA_CPSL_C_ATTRS = 2;  # ::Value object of type Tuple
         my $VSA_IDENT_C_PKG_NAME_BASE       = 1;  # ::Value object of type Array of type String
