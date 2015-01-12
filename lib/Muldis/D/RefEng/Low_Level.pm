@@ -3,9 +3,6 @@ use utf8;
 use strict;
 use warnings FATAL => 'all';
 
-###########################################################################
-###########################################################################
-
 use B;
 use Math::BigInt try => 'GMP';
 
@@ -23,6 +20,11 @@ use Math::BigInt try => 'GMP';
         $VERSION = eval $VERSION;
     }
 } # class Muldis::D::RefEng::Low_Level::Value
+
+# There is no class in ::Low_Level to represent a Muldis D variable partly
+# given their non-trivial possibly-pseudo nature and so implementing such
+# is left to other parts of RefEng.  Instead, any subject-to-update
+# parameters take a Perl refref pointing to a ::Value object.
 
 ###########################################################################
 ###########################################################################
@@ -46,13 +48,18 @@ use Math::BigInt try => 'GMP';
     sub _refcount { B::svref_2object( shift @_ )->REFCNT; };
 
     # NAMING CONVENTIONS:
-        # $h : value handle : a Perl refref blessed into the ::Value class
+        # $MDLL : singleton obj repr Muldis_D::Low_Level package
+        # $h : value handle : a Perl refref blessed into the ::Value class,
             # that refref points to a value struct
         # $s : value struct : a Perl hashref defining the value itself
-        # $k : value kind : a Perl string given to ::Value.new() that says
-            # what kind of low-level type we are selecting a value for
-        # $p : value payload : something given to ::Value.new() that says
-            # which value we are selecting, within the context of k.
+        # $k : value kind : first attr of value struct, says the base type
+        # $p : value payload : other main attr(s) of value struct, says
+            # which value we are selecting, within the context of $k
+        # $var : variable : unblessed Perl refref points to value handle/$h
+        # select_MDLL() : submethod to obtain $MDLL object
+        # v_[A-Z][a-z]+() : new/same ::Value obj def in terms of Perl values
+        # v_[A-Z][a-z]+_as_[A-Za-z]+() : extract Perl payload from ::Value
+        # [A-Z][a-z]+__[A-Za-z0-9_]+() : Muldis D rtns, take+return ::Value
 
     # Internal identifiers of each value struct attribute if it exists.
         my $VSA_S_KIND = 0;  # value struct kind, aka $k; determines other attrs
@@ -85,9 +92,9 @@ use Math::BigInt try => 'GMP';
     # ATTRIBUTE LIST OF ::LowLevel OBJECTS:
         # TODO
 
-    my $MDLL = bless {}, __PACKAGE__;
+    my $_MDLL = bless {}, __PACKAGE__;
 
-    my $cache = {
+    my $_cache = {
         $S_KIND_BOOL  => {},
         $S_KIND_INT   => {},
         $S_KIND_ARRAY => {},
@@ -99,21 +106,21 @@ use Math::BigInt try => 'GMP';
     };
 
     # Boolean false and true values.
-    my $false = $cache->{$S_KIND_BOOL}->{(1==0)} = _new_v( {
+    my $false = $_cache->{$S_KIND_BOOL}->{(1==0)} = _new_v( {
         $VSA_S_KIND     => $S_KIND_BOOL,
         $VSA_BOOL_AS_SV => (1==0),
     } );
-    my $true = $cache->{$S_KIND_BOOL}->{(1==1)} = _new_v( {
+    my $true = $_cache->{$S_KIND_BOOL}->{(1==1)} = _new_v( {
         $VSA_S_KIND     => $S_KIND_BOOL,
         $VSA_BOOL_AS_SV => (1==1),
     } );
 
     # Integer 0 and 1 values.
-    my $zero = $cache->{$S_KIND_INT}->{0} = _new_v( {
+    my $zero = $_cache->{$S_KIND_INT}->{0} = _new_v( {
         $VSA_S_KIND    => $S_KIND_INT,
         $VSA_INT_AS_SV => 0,
     } );
-    my $one = $cache->{$S_KIND_INT}->{1} = _new_v( {
+    my $one = $_cache->{$S_KIND_INT}->{1} = _new_v( {
         $VSA_S_KIND    => $S_KIND_INT,
         $VSA_INT_AS_SV => 1,
     } );
@@ -122,7 +129,7 @@ use Math::BigInt try => 'GMP';
 
 sub select_MDLL
 {
-    return $MDLL;
+    return $_MDLL;
 }
 
 sub _new_v
@@ -135,14 +142,14 @@ sub _new_v
 
 sub v_Boolean
 {
-    my (undef, $p) = @_;
+    my ($MDLL, $p) = @_;
     # Expect $p to be a defined Perl native boolean.
-    return $cache->{$S_KIND_BOOL}->{$p};
+    return $_cache->{$S_KIND_BOOL}->{$p};
 }
 
-sub Boolean_as_SV
+sub v_Boolean_as_SV
 {
-    my (undef, $h) = @_;
+    my ($MDLL, $h) = @_;
     # Expect $h to be an Boolean.
     return $$h->{$VSA_BOOL_AS_SV};
 }
@@ -151,13 +158,13 @@ sub Boolean_as_SV
 
 sub v_Integer
 {
-    my (undef, $p) = @_;
+    my ($MDLL, $p) = @_;
     if (!ref $p)
     {
         # Expect $p to be a defined Perl native integer, IV or SV.
-        if (exists $cache->{$S_KIND_INT}->{$p})
+        if (exists $_cache->{$S_KIND_INT}->{$p})
         {
-            return $cache->{$S_KIND_INT}->{$p};
+            return $_cache->{$S_KIND_INT}->{$p};
         }
         my $h = _new_v( {
             $VSA_S_KIND    => $S_KIND_INT,
@@ -165,7 +172,7 @@ sub v_Integer
         } );
         if ($p >= -128 and $p <= 127)
         {
-            $cache->{$S_KIND_INT}->{$p} = $h;
+            $_cache->{$S_KIND_INT}->{$p} = $h;
         }
         return $h;
     }
@@ -187,9 +194,9 @@ sub v_Integer
     }
 }
 
-sub Integer_as_SV
+sub v_Integer_as_SV
 {
-    my (undef, $h) = @_;
+    my ($MDLL, $h) = @_;
     # Expect $h to be an Integer.
     if (!exists $$h->{$VSA_INT_AS_SV})
     {
@@ -198,9 +205,9 @@ sub Integer_as_SV
     return $$h->{$VSA_INT_AS_SV};
 }
 
-sub Integer_as_BigInt
+sub v_Integer_as_BigInt
 {
-    my (undef, $h) = @_;
+    my ($MDLL, $h) = @_;
     # Expect $h to be an Integer.
     if (!exists $$h->{$VSA_INT_AS_BIG})
     {
@@ -211,9 +218,9 @@ sub Integer_as_BigInt
 
 ###########################################################################
 
-sub MDLL__Universal__same
+sub Universal__same # function
 {
-    my (undef, $h_lhs, $h_rhs) = @_;
+    my ($MDLL, $h_lhs, $h_rhs) = @_;
     if (refaddr $h_lhs == refaddr $h_rhs)
     {
         # Caller used the same ::Value object/handle in multiple places.
@@ -237,8 +244,8 @@ sub MDLL__Universal__same
     }
     elsif ($k == $S_KIND_INT)
     {
-        $result_p = ($MDLL->Integer_as_SV($h_lhs)
-            eq $MDLL->Integer_as_SV($h_rhs));
+        $result_p = ($MDLL->v_Integer_as_SV($h_lhs)
+            eq $MDLL->v_Integer_as_SV($h_rhs));
     }
     else
     {
@@ -262,70 +269,76 @@ sub MDLL__Universal__same
     return $result_p ? $true : $false;
 }
 
+sub Universal__assign # updater
+{
+    my ($MDLL, $var_target, $h_value) = @_;
+    $$var_target = $h_value;
+}
+
 ###########################################################################
 
-sub MDLL__Boolean__false
+sub Boolean__false # function
 {
     return $false;
 }
 
-sub MDLL__Boolean__true
+sub Boolean__true # function
 {
     return $true;
 }
 
-sub MDLL__Boolean__not
+sub Boolean__not # function
 {
-    my (undef, $h) = @_;
+    my ($MDLL, $h) = @_;
     return (refaddr $h == refaddr $true) ? $true : $false;
 }
 
-sub MDLL__Boolean__and
+sub Boolean__and # function
 {
-    my (undef, $h_lhs, $h_rhs) = @_;
+    my ($MDLL, $h_lhs, $h_rhs) = @_;
     return (refaddr $h_lhs == refaddr $true) ? $h_rhs : $false;
 }
 
-sub MDLL__Boolean__or
+sub Boolean__or # function
 {
-    my (undef, $h_lhs, $h_rhs) = @_;
+    my ($MDLL, $h_lhs, $h_rhs) = @_;
     return (refaddr $h_lhs == refaddr $true) ? $true : $h_rhs;
 }
 
-sub MDLL__Boolean__xor
+sub Boolean__xor # function
 {
-    my (undef, $h_lhs, $h_rhs) = @_;
+    my ($MDLL, $h_lhs, $h_rhs) = @_;
     return (refaddr $h_lhs == refaddr $true)
-        ? $MDLL->MDLL__Boolean__not($h_rhs) : $h_rhs;
+        ? $MDLL->Boolean__not($h_rhs) : $h_rhs;
 }
 
 ###########################################################################
 
-sub MDLL__Integer__zero
+sub Integer__zero # function
 {
     return $zero;
 }
 
-sub MDLL__Integer__is_zero
+sub Integer__is_zero # function
 {
-    my (undef, $h) = @_;
+    my ($MDLL, $h) = @_;
     return (refaddr $h == refaddr $zero) ? $true : $false;
 }
 
-sub MDLL__Integer__one
+sub Integer__one # function
 {
     return $one;
 }
 
-sub MDLL__Integer__is_one
+sub Integer__is_one # function
 {
-    my (undef, $h) = @_;
+    my ($MDLL, $h) = @_;
     return (refaddr $h == refaddr $one) ? $true : $false;
 }
 
-sub MDLL__Integer__plus
+sub Integer__plus # function
 {
-    my (undef, $h_augend, $h_addend) = @_;
+    my ($MDLL, $h_augend, $h_addend) = @_;
     if (refaddr $h_augend == refaddr $zero)
     {
         return $h_addend;
@@ -354,7 +367,7 @@ sub MDLL__Integer__plus
     {
         # Result too big for an IV so we lost precision and got an FV.
         $sum = Math::BigInt->badd( $$h_augend->{$VSA_INT_AS_SV},
-            $$h_addend->{$VSA_INT_AS_SV} 
+            $$h_addend->{$VSA_INT_AS_SV}
         );
     }
     return $MDLL->v_Integer( $sum );
