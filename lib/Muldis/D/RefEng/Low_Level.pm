@@ -117,11 +117,7 @@ use Math::BigInt try => 'GMP';
     my $_cache = {
         $S_KIND_BOOL  => {},
         $S_KIND_INT   => {},
-        $S_KIND_ARRAY => {},
         $S_KIND_STR   => {},
-        $S_KIND_DICT  => {},
-        $S_KIND_TUPLE => {},
-        $S_KIND_CPSL  => {},
         $S_KIND_IDENT => {},
     };
 
@@ -143,6 +139,24 @@ use Math::BigInt try => 'GMP';
     my $one = $_cache->{$S_KIND_INT}->{1} = _new_v( {
         $VSA_S_KIND    => $S_KIND_INT,
         $VSA_INT_AS_SV => 1,
+    } );
+
+    # Array with no elements.
+    my $empty_array = _new_v( {
+        $VSA_S_KIND      => $S_KIND_ARRAY,
+        $VSA_ARRAY_AS_AV => [],
+    } );
+
+    # String with no elements.
+    my $empty_str = $_cache->{$S_KIND_STR}->{0} = _new_v( {
+        $VSA_S_KIND    => $S_KIND_STR,
+        $VSA_STR_AS_SV => q{},
+    } );
+
+    # Tuple with no elements.
+    my $nullary_tuple = _new_v( {
+        $VSA_S_KIND      => $S_KIND_TUPLE,
+        $VSA_TUPLE_AS_HV => {},
     } );
 
 ###########################################################################
@@ -178,7 +192,7 @@ sub v_Boolean_as_SV
 
 sub v_Integer
 {
-    my ($MDLL, $p) = @_;
+    my ($MDLL, $p, $want_cached) = @_;
     if (!ref $p)
     {
         # Expect $p to be a defined Perl native integer, IV or SV.
@@ -190,7 +204,7 @@ sub v_Integer
             $VSA_S_KIND    => $S_KIND_INT,
             $VSA_INT_AS_SV => $p,
         } );
-        if ($p >= -128 and $p <= 127)
+        if ($want_cached or $p >= -128 and $p <= 127)
         {
             $_cache->{$S_KIND_INT}->{$p} = $h;
         }
@@ -207,10 +221,15 @@ sub v_Integer
         {
             return $one;
         }
-        return _new_v( {
+        my $h = _new_v( {
             $VSA_S_KIND     => $S_KIND_INT,
             $VSA_INT_AS_BIG => $p,
         } );
+        if ($want_cached)
+        {
+            $_cache->{$S_KIND_INT}->{$MDLL->v_Integer_as_SV($h)} = $h;
+        }
+        return $h;
     }
 }
 
@@ -238,6 +257,93 @@ sub v_Integer_as_BigInt
 
 ###########################################################################
 
+sub v_Array
+{
+    my ($MDLL, $p) = @_;
+    # Expect $p to be a Perl arrayref.
+    if (@$p == 0)
+    {
+        return $empty_array;
+    }
+    return _new_v( {
+        $VSA_S_KIND      => $S_KIND_ARRAY,
+        $VSA_ARRAY_AS_AV => $p,
+    } );
+}
+
+sub v_Array_as_AV
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be an Array.
+    return $$h->{$VSA_ARRAY_AS_AV};
+}
+
+###########################################################################
+
+sub v_String
+{
+    my ($MDLL, $p, $want_cached) = @_;
+    if (!ref $p)
+    {
+        # Expect $p to be a Perl arrayref of non-neg Integer / native ints.
+        $p = join q{},
+            map { chr(ref $_ ? $MDLL->v_Integer_as_SV($_) : $_) } @$p;
+    }
+    # Expect $p to be a defined Perl native string, of octets or chars.
+    if (exists $_cache->{$S_KIND_STR}->{$p})
+    {
+        return $_cache->{$S_KIND_STR}->{$p};
+    }
+    my $h = _new_v( {
+        $VSA_S_KIND    => $S_KIND_STR,
+        $VSA_STR_AS_SV => $p,
+    } );
+    if ($want_cached)
+    {
+        $_cache->{$S_KIND_STR}->{$p} = $h;
+    }
+    return $h;
+}
+
+sub v_String_as_SV
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be an String.
+    return $$h->{$VSA_STR_AS_SV};
+}
+
+sub v_String_as_AV
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be an String.
+    return [map { ord $_ } split q{}, $$h->{$VSA_STR_AS_SV}];
+}
+
+###########################################################################
+
+sub v_Tuple
+{
+    my ($MDLL, $p) = @_;
+    # Expect $p to be a Perl hashref.
+    if ((scalar keys %$p) == 0)
+    {
+        return $nullary_tuple;
+    }
+    return _new_v( {
+        $VSA_S_KIND      => $S_KIND_TUPLE,
+        $VSA_TUPLE_AS_HV => $p,
+    } );
+}
+
+sub v_Tuple_as_HV
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be an Tuple.
+    return $$h->{$VSA_TUPLE_AS_HV};
+}
+
+###########################################################################
+
 sub Universal__same # function
 {
     my ($MDLL, $h_lhs, $h_rhs) = @_;
@@ -252,20 +358,32 @@ sub Universal__same # function
         # then probably called same() on them so their structs were merged.
         return $true;
     }
-    if ($$h_lhs->{$VSA_S_KIND} != $$h_rhs->{$VSA_S_KIND})
+    if ($$h_lhs->{$VSA_S_KIND} eq $$h_rhs->{$VSA_S_KIND})
     {
         return $false;
     }
     my $result_p;
     my $k = $$h_lhs->{$VSA_S_KIND};
-    if ($k == $S_KIND_BOOL)
+    if ($k eq $S_KIND_BOOL)
     {
         confess q{we should never get here due to prior refaddr tests};
     }
-    elsif ($k == $S_KIND_INT)
+    elsif ($k eq $S_KIND_INT)
     {
         $result_p = ($MDLL->v_Integer_as_SV($h_lhs)
             eq $MDLL->v_Integer_as_SV($h_rhs));
+    }
+    elsif ($k eq $S_KIND_ARRAY)
+    {
+        confess q{not implemented};
+    }
+    elsif ($k eq $S_KIND_STR)
+    {
+        $result_p = ($$h_lhs->{$VSA_WHICH} eq $$h_rhs->{$VSA_WHICH});
+    }
+    elsif ($k eq $S_KIND_TUPLE)
+    {
+        confess q{not implemented};
     }
     else
     {
@@ -391,6 +509,45 @@ sub Integer__plus # function
         );
     }
     return $MDLL->v_Integer( $sum );
+}
+
+###########################################################################
+
+sub Array__empty # function
+{
+    return $empty_array;
+}
+
+sub Array__is_empty # function
+{
+    my ($MDLL, $h) = @_;
+    return (refaddr $h == refaddr $empty_array) ? $true : $false;
+}
+
+###########################################################################
+
+sub String__empty # function
+{
+    return $empty_str;
+}
+
+sub String__is_empty # function
+{
+    my ($MDLL, $h) = @_;
+    return (refaddr $h == refaddr $empty_str) ? $true : $false;
+}
+
+###########################################################################
+
+sub Tuple__nullary # function
+{
+    return $nullary_tuple;
+}
+
+sub Tuple__is_nullary # function
+{
+    my ($MDLL, $h) = @_;
+    return (refaddr $h == refaddr $nullary_tuple) ? $true : $false;
 }
 
 ###########################################################################
