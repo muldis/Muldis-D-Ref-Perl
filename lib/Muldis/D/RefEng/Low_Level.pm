@@ -63,7 +63,7 @@ use Math::BigInt try => 'GMP';
 
     # Internal identifiers of each value struct attribute if it exists.
         my $VSA_S_KIND = 'k';  # value struct kind, aka $k; determines further attrs
-        # Valid $s{$MSA_S_KIND} aka $k values:
+            # Valid $s{$MSA_S_KIND} aka $k values:
             my $S_KIND_BOOL  = 'b';  # value of type Boolean
             my $S_KIND_INT   = 'i';  # value of type Integer
             my $S_KIND_ARRAY = 'a';  # value of type Array
@@ -79,18 +79,116 @@ use Math::BigInt try => 'GMP';
             # for hashref key flatten any array in order appropriately;
             # is canonical format identity between all values of same $k;
             # (externally) prepend $k to arrayref for identity across all ::Value;
-            # some type-specific attrs may alias to this if appropriate
-        my $VSA_BOOL_AS_SV = 'which';  # Perl native boolean if exists; (1==0) or (1==1)
-        my $VSA_INT_AS_SV  = 'which';  # Perl native integer if exists (IV and/or SV)
-        my $VSA_INT_AS_BIG = 'bigint';  # Math::BigInt object if exists
-        my $VSA_ARRAY_AS_AV = 'av';  # Perl arrayref if exists of ::Value objects
-        my $VSA_STR_AS_SV = 'which';  # Perl native string if exists, either octet or char,
-            # while API to take Muldis D String as Array of Integer exists,
-            # internally always stored as native Perl string,
-            # hence String elements outside Perl's said range not supported
-        my $VSA_DICT_C_TODO = 1;  # ? TODO, list of components when type is a Dict, eg form of a B+tree or something
-        my $VSA_DICT_C_ELEMS = 2;  # ? Perl arrayref of ::Value objects
-        my $VSA_DICT_C_INDEXES = 3;  # ? Perl hashref of ::Value objects
+            # some type-specific attrs may alias to this if appropriate;
+            # just flatten Identifier as S::R did, compon as-is with leading len counts,no escapes
+        my $VSA_P_AS_SV = 'sv';  # Perl defined nonref scalar if exists
+            # Further restriction/detail based on struct kind:
+                # Boolean - Perl native boolean if exists; (1==0) or (1==1)
+                # Integer - Perl native integer if exists (IV and/or SV)
+                # String - Perl native string if exists, either octet or char,
+                    # while API to take Muldis D String as Array of Integer exists,
+                    # internally always stored as native Perl string,
+                    # hence String elements outside Perl's said range not supported
+        my $VSA_P_AS_BIGINT = 'bigint';  # Math::BigInt object if exists
+        my $VSA_P_AS_AV = 'av';  # Array - Perl arrayref if exists of ::Value objects
+        my $VSA_P_AS_HV = 'hv';  # Tuple - Perl hashref if exists of ::Value objects,
+            # note about String limitations affects Tuple attr names also
+        my $VSA_DICT_C_ELEMS = 'elems';  # the dictionary elements if exists
+            # A tree structure conceptually holding set of key+value pairs
+            # where the keys all mutually unique and values may not be.
+            # Each key+value (DK+DV) typically a pair (DP) of ::Value, lives at a leaf.
+            # This structure is typically O(1) for testing presence/absence
+            # of a single DK when looked up using the whole of the DK value
+            # rather than a portion/hash of it, and fetching its DV;
+            # likewise, O(M) for looking up M DK values.
+            # It is also typically O(N) to build the structure in the first
+            # place from an array of N DP; likewise performance should be
+            # not worse than that O(N+M) when deriving new Dict values from
+            # existing ones in the form of DP inserts, deletes, unions,
+            # intersects, diffs, and so on as we would try to share tree
+            # sub-structures between the old and new Dicts.
+            # See 'keys'+'indexes' for other ways of working with the DPs.
+            # The creation of 'elems' is lazy iff any 'keys' exist and it
+            # may never be created at all if not needed.
+            # Tree root isa Perl hashref:
+                # One elem per struct kind / low level type.
+                    # Each DP is sorted into a bucket for its DK's $k.
+                    # hkey is any value valid for $k.
+                    # When DK's $k in {Boolean, Integer, String, Tuple,
+                        # Capsule, Identifier}, hval is a Perl hashref;
+                        # when $k in {Array, Dict}, hval is 2-elem arrayref.
+                    # hval is hashref, k+v meaning/struct dep on DK's $k:
+                        # Each {Boolean,Integer,String}-typed DK:
+                            # hkey is just the DK's SV payload.
+                            # hval is the DP.
+                        # Each Tuple-typed DK:
+                            # hkey is Tuple-specific serialization of the
+                                # whole Tuple heading; its attr names are
+                                # catenated in sorted order, w strlen meta.
+                            # hval is a 2-elem Perl arrayref:
+                                # We are storing all DP sharing a Tuple
+                                # heading in a lazily built structure for
+                                # performance/space reasons, especially as
+                                # we may have a whole Relation here or
+                                # otherwise a set of Tuple whose lookup
+                                # strategy is better determined by a user
+                                # provided explicit 'keys'.
+                                # [0] is a Perl arrayref (eager):
+                                    # Each elem is a DP, in arbitrary order
+                                    # that may match the input order.
+                                    # This array might have duplicates.
+                                # [1] is a Perl hashref (lazy):
+                                    # Each hval is a DP, whose corresp
+                                    # hkey serializes whole Tuple body;
+                                    # attr vals catenated in order corresp
+                                    # to sorted attr names, w strlen meta.
+                                    # We only populate this hashref when we
+                                    # want to count the number of distinct
+                                    # DP we have and no 'keys' exist.
+                        # Each Capsule-typed DK:
+                            # hkey is derived from DK "type" attr:
+                                # Same as if DK were Identifer-typed.
+                            # hval is derived from DK "attrs" attr:
+                                # hval is a Perl hashref.
+                                # Same format as elems[Tuple].
+                        # Each Identifier-typed DK:
+                            # hkey is Ident-specific serialization of DK.
+                                # Its 4 attrs catenated in their defined
+                                # order, recursively, with strlen meta/etc.
+                            # hval is the DP.
+                    # hval is 2-elem arrayref, elem meaning/struct dep on DK's $k:
+                        # Each Array-typed DK:
+                            # We are storing all Array in a lazily built
+                            # structure like with Tuples but not split by
+                            # heading, same reasons, same 'keys' effects.
+                            # [0] is a Perl arrayref (eager):
+                                # Each elem a DP, arbit order, possib dups.
+                            # [1] is a Perl hashref (lazy):
+                                # Each hval a DP; hkey serializes whole
+                                # Array in index order.
+                        # Each Dictionary-typed DK:
+                            # We are storing all Dictionary in a lazily
+                            # built structure like with Arrays.
+                            # [0] is a Perl arrayref (eager):
+                                # Each elem a DP, arbit order, possib dups.
+                            # [1] is a Perl hashref (lazy):
+                                # Each hval a DP; hkey serializes whole
+                                # Dictionary by first serializing all
+                                # elements in it and then catenating those
+                                # strings in mutually sorted order.
+        my $VSA_DICT_C_KEYS = 'keys';  # DPs indexed by unique idents
+            # TODO, write this.
+            # Using 'keys' is recommended as users (of Low_Level) can often
+            # provide better indexing strategies than naive ones we use by
+            # default for simplicity.  Omitting any 'keys' is fine/best
+            # when our Dictionary just contains Low_Level scalar values but
+            # it should be employed for {Tuple,Array,Dict,Capsule} elems.
+            # Note that when using 'keys' Low_Level will just trust the
+            # user that any values providing for indexing are unique between
+            # all DKs used in the same Dict; if not, bugs may result;
+            # in contrast, 'indexes' doesn't make that assumption.
+        my $VSA_DICT_C_INDEXES = 'indexes';  # DPs ind by nonunique idents
+            # TODO, rewrite this ...
             # users of Dict typically provide each elem as a triple of
             # {index str/aref, dict key ::Value, dict value ::Value}
             # within the context of naming an index to use;
@@ -100,8 +198,15 @@ use Math::BigInt try => 'GMP';
             # particularly if the Dict is implementing a Relation;
             # or more indexes could be added ad-hoc to a Dict ::Value later;
             # ? see also how Set::Relation works ...
-        my $VSA_TUPLE_AS_HV = 'hv';  # Perl hashref if exists of ::Value objects,
-            # note about String limitations affects Tuple attr names also
+            # FOR NOW lets make initial/default index/tree work like
+            # $_cache meaning root has a child per low level type, then
+            # children varying structure on said type; for SV-based types
+            # its just the value at that point, for others its more tree
+            # eg with tuple indexed by attrname;
+            # Array could be ind by first several elems vals maybe,
+            # Tuple by first several elems keys+vals maybe;
+            # Capsule certainly by 'type' (as SV) first then by Tuple way;
+            # we can change $_cache itself to be just a Dict I suppose
         my $VSA_CPSL_C_TYPE  = 1;  # ::Value object of type Identifier
         my $VSA_CPSL_C_ATTRS = 2;  # ::Value object of type Tuple
         my $VSA_IDENT_C_PKG_NAME_BASE       = 1;  # ::Value object of type Array of type String
@@ -123,40 +228,40 @@ use Math::BigInt try => 'GMP';
 
     # Boolean false and true values.
     my $false = $_cache->{$S_KIND_BOOL}->{(1==0)} = _new_v( {
-        $VSA_S_KIND     => $S_KIND_BOOL,
-        $VSA_BOOL_AS_SV => (1==0),
+        $VSA_S_KIND  => $S_KIND_BOOL,
+        $VSA_P_AS_SV => (1==0),
     } );
     my $true = $_cache->{$S_KIND_BOOL}->{(1==1)} = _new_v( {
-        $VSA_S_KIND     => $S_KIND_BOOL,
-        $VSA_BOOL_AS_SV => (1==1),
+        $VSA_S_KIND  => $S_KIND_BOOL,
+        $VSA_P_AS_SV => (1==1),
     } );
 
     # Integer 0 and 1 values.
     my $zero = $_cache->{$S_KIND_INT}->{0} = _new_v( {
-        $VSA_S_KIND    => $S_KIND_INT,
-        $VSA_INT_AS_SV => 0,
+        $VSA_S_KIND  => $S_KIND_INT,
+        $VSA_P_AS_SV => 0,
     } );
     my $one = $_cache->{$S_KIND_INT}->{1} = _new_v( {
-        $VSA_S_KIND    => $S_KIND_INT,
-        $VSA_INT_AS_SV => 1,
+        $VSA_S_KIND  => $S_KIND_INT,
+        $VSA_P_AS_SV => 1,
     } );
 
     # Array with no elements.
     my $empty_array = _new_v( {
-        $VSA_S_KIND      => $S_KIND_ARRAY,
-        $VSA_ARRAY_AS_AV => [],
+        $VSA_S_KIND  => $S_KIND_ARRAY,
+        $VSA_P_AS_AV => [],
     } );
 
     # String with no elements.
     my $empty_str = $_cache->{$S_KIND_STR}->{0} = _new_v( {
-        $VSA_S_KIND    => $S_KIND_STR,
-        $VSA_STR_AS_SV => q{},
+        $VSA_S_KIND  => $S_KIND_STR,
+        $VSA_P_AS_SV => q{},
     } );
 
     # Tuple with no elements.
     my $nullary_tuple = _new_v( {
-        $VSA_S_KIND      => $S_KIND_TUPLE,
-        $VSA_TUPLE_AS_HV => {},
+        $VSA_S_KIND  => $S_KIND_TUPLE,
+        $VSA_P_AS_HV => {},
     } );
 
 ###########################################################################
@@ -185,7 +290,7 @@ sub v_Boolean_as_SV
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an Boolean.
-    return $$h->{$VSA_BOOL_AS_SV};
+    return $$h->{$VSA_P_AS_SV};
 }
 
 ###########################################################################
@@ -201,8 +306,8 @@ sub v_Integer
             return $_cache->{$S_KIND_INT}->{$p};
         }
         my $h = _new_v( {
-            $VSA_S_KIND    => $S_KIND_INT,
-            $VSA_INT_AS_SV => $p,
+            $VSA_S_KIND  => $S_KIND_INT,
+            $VSA_P_AS_SV => $p,
         } );
         if ($want_cached or $p >= -128 and $p <= 127)
         {
@@ -222,8 +327,8 @@ sub v_Integer
             return $one;
         }
         my $h = _new_v( {
-            $VSA_S_KIND     => $S_KIND_INT,
-            $VSA_INT_AS_BIG => $p,
+            $VSA_S_KIND      => $S_KIND_INT,
+            $VSA_P_AS_BIGINT => $p,
         } );
         if ($want_cached)
         {
@@ -237,22 +342,22 @@ sub v_Integer_as_SV
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an Integer.
-    if (!exists $$h->{$VSA_INT_AS_SV})
+    if (!exists $$h->{$VSA_P_AS_SV})
     {
-        $$h->{$VSA_INT_AS_SV} = $$h->{$VSA_INT_AS_BIG}->bstr();
+        $$h->{$VSA_P_AS_SV} = $$h->{$VSA_P_AS_BIGINT}->bstr();
     }
-    return $$h->{$VSA_INT_AS_SV};
+    return $$h->{$VSA_P_AS_SV};
 }
 
 sub v_Integer_as_BigInt
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an Integer.
-    if (!exists $$h->{$VSA_INT_AS_BIG})
+    if (!exists $$h->{$VSA_P_AS_BIGINT})
     {
-        $$h->{$VSA_INT_AS_BIG} = Math::BigInt->new( $$h->{$VSA_INT_AS_SV} );
+        $$h->{$VSA_P_AS_BIGINT} = Math::BigInt->new( $$h->{$VSA_P_AS_SV} );
     }
-    return $$h->{$VSA_INT_AS_BIG};
+    return $$h->{$VSA_P_AS_BIGINT};
 }
 
 ###########################################################################
@@ -266,8 +371,8 @@ sub v_Array
         return $empty_array;
     }
     return _new_v( {
-        $VSA_S_KIND      => $S_KIND_ARRAY,
-        $VSA_ARRAY_AS_AV => $p,
+        $VSA_S_KIND  => $S_KIND_ARRAY,
+        $VSA_P_AS_AV => $p,
     } );
 }
 
@@ -275,7 +380,7 @@ sub v_Array_as_AV
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an Array.
-    return $$h->{$VSA_ARRAY_AS_AV};
+    return $$h->{$VSA_P_AS_AV};
 }
 
 ###########################################################################
@@ -295,8 +400,8 @@ sub v_String
         return $_cache->{$S_KIND_STR}->{$p};
     }
     my $h = _new_v( {
-        $VSA_S_KIND    => $S_KIND_STR,
-        $VSA_STR_AS_SV => $p,
+        $VSA_S_KIND  => $S_KIND_STR,
+        $VSA_P_AS_SV => $p,
     } );
     if ($want_cached)
     {
@@ -309,14 +414,14 @@ sub v_String_as_SV
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an String.
-    return $$h->{$VSA_STR_AS_SV};
+    return $$h->{$VSA_P_AS_SV};
 }
 
 sub v_String_as_AV
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an String.
-    return [map { ord $_ } split q{}, $$h->{$VSA_STR_AS_SV}];
+    return [map { ord $_ } split q{}, $$h->{$VSA_P_AS_SV}];
 }
 
 ###########################################################################
@@ -330,8 +435,8 @@ sub v_Tuple
         return $nullary_tuple;
     }
     return _new_v( {
-        $VSA_S_KIND      => $S_KIND_TUPLE,
-        $VSA_TUPLE_AS_HV => $p,
+        $VSA_S_KIND  => $S_KIND_TUPLE,
+        $VSA_P_AS_HV => $p,
     } );
 }
 
@@ -339,7 +444,7 @@ sub v_Tuple_as_HV
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an Tuple.
-    return $$h->{$VSA_TUPLE_AS_HV};
+    return $$h->{$VSA_P_AS_HV};
 }
 
 ###########################################################################
@@ -379,7 +484,7 @@ sub Universal__same # function
     }
     elsif ($k eq $S_KIND_STR)
     {
-        $result_p = ($$h_lhs->{$VSA_WHICH} eq $$h_rhs->{$VSA_WHICH});
+        $result_p = ($$h_lhs->{$VSA_P_AS_SV} eq $$h_rhs->{$VSA_P_AS_SV});
     }
     elsif ($k eq $S_KIND_TUPLE)
     {
@@ -485,27 +590,27 @@ sub Integer__plus # function
     {
         return $h_augend;
     }
-    if (exists $$h_augend->{$VSA_INT_AS_BIG}
-        or exists $$h_addend->{$VSA_INT_AS_BIG})
+    if (exists $$h_augend->{$VSA_P_AS_BIGINT}
+        or exists $$h_addend->{$VSA_P_AS_BIGINT})
     {
         # At least one input is a Math::BigInt object.
         return $MDLL->v_Integer( Math::BigInt->badd(
-            exists $$h_augend->{$VSA_INT_AS_BIG}
-                ? $$h_augend->{$VSA_INT_AS_BIG}
-                : $$h_augend->{$VSA_INT_AS_SV},
-            exists $$h_addend->{$VSA_INT_AS_BIG}
-                ? $$h_addend->{$VSA_INT_AS_BIG}
-                : $$h_addend->{$VSA_INT_AS_SV},
+            exists $$h_augend->{$VSA_P_AS_BIGINT}
+                ? $$h_augend->{$VSA_P_AS_BIGINT}
+                : $$h_augend->{$VSA_P_AS_SV},
+            exists $$h_addend->{$VSA_P_AS_BIGINT}
+                ? $$h_addend->{$VSA_P_AS_BIGINT}
+                : $$h_addend->{$VSA_P_AS_SV},
         ) );
     }
     # Both inputs are native Perl integers.
-    my $sum = $$h_augend->{$VSA_INT_AS_SV} + $$h_addend->{$VSA_INT_AS_SV};
+    my $sum = $$h_augend->{$VSA_P_AS_SV} + $$h_addend->{$VSA_P_AS_SV};
     # We actually want to use a devel tool to see if the IV is canonical rather than an FV.
     if (int $sum ne $sum)
     {
         # Result too big for an IV so we lost precision and got an FV.
-        $sum = Math::BigInt->badd( $$h_augend->{$VSA_INT_AS_SV},
-            $$h_addend->{$VSA_INT_AS_SV}
+        $sum = Math::BigInt->badd( $$h_augend->{$VSA_P_AS_SV},
+            $$h_addend->{$VSA_P_AS_SV}
         );
     }
     return $MDLL->v_Integer( $sum );
