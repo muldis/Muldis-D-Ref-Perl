@@ -71,28 +71,47 @@ use Math::BigInt try => 'GMP';
             my $S_KIND_DICT  = 'd';  # value of type Dictionary
             my $S_KIND_TUPLE = 't';  # value of type Tuple
             my $S_KIND_CPSL  = 'c';  # value of type Capsule
-            my $S_KIND_IDENT = 'e';  # value of type Identifier
-        my $VSA_WHICH = 'which';  # Perl native string/SV if exists,
-            # or Perl arrayref of said string or arrayref,
-            # for use when indexing this value by its default method,
-            # such as for use as a Dict key particularly if a B+tree/etc;
-            # for hashref key flatten any array in order appropriately;
-            # is canonical format identity between all values of same $k;
-            # (externally) prepend $k to arrayref for identity across all ::Value;
-            # some type-specific attrs may alias to this if appropriate;
-            # just flatten Identifier as S::R did, compon as-is with leading len counts,no escapes
+            my $S_KIND_IDENT = 'n';  # value of type Identifier
+            my $S_KIND_EXT   = 'e';  # value of type External
         my $VSA_P_AS_SV = 'sv';  # Perl defined nonref scalar if exists
             # Further restriction/detail based on struct kind:
-                # Boolean - Perl native boolean if exists; (1==0) or (1==1)
-                # Integer - Perl native integer if exists (IV and/or SV)
-                # String - Perl native string if exists, either octet or char,
+                # Boolean - Perl native boolean; (1==0) or (1==1)
+                # Integer - Perl native integer (IV and/or SV)
+                # String - Perl native string, either octet or char,
                     # while API to take Muldis D String as Array of Integer exists,
                     # internally always stored as native Perl string,
                     # hence String elements outside Perl's said range not supported
-        my $VSA_P_AS_BIGINT = 'bigint';  # Math::BigInt object if exists
-        my $VSA_P_AS_AV = 'av';  # Array - Perl arrayref if exists of ::Value objects
-        my $VSA_P_AS_HV = 'hv';  # Tuple - Perl hashref if exists of ::Value objects,
-            # note about String limitations affects Tuple attr names also
+        my $VSA_P_AS_BIGINT = 'bigint';  # Integer - Math::BigInt object if exists
+        my $VSA_P_AS_AV = 'av';  # Perl arrayref if exists
+            # Further restriction/detail based on struct kind:
+                # Array - Perl arrayref of 0..N ::Value objects
+                # Capsule (1/2) - Capsule type - same arrayref as for Identifier
+                # Identifier - Perl arrayref of 4 elements, in order:
+                    # [0] - pkg_name_base - Perl arrayref of 0..N native string
+                    # [1] - pkg_name_ext - Perl arrayref of 0..N native string
+                    # [2] - rel_starts_n_lev_up - Perl native nonnegative integer
+                    # [3] - path_beneath_pkg - Perl arrayref of 0..N native string
+        my $VSA_P_AS_HV = 'hv';  # Perl hashref if exists
+            # Further restriction/detail based on struct kind:
+                # Tuple - Perl hashref of 0..N ::Value objects,
+                    # note about String limitations affects Tuple attr names also
+                # Capsule (2/2) - Capsule attrs - same hashref as for Tuple
+        my $VSA_P_AS_EXT = 'ext';  # External - any native Perl value at all
+            # Anything one can assign to a Perl scalar variable / $foo.
+            # We store it as is but its a black box to Muldis D at large,
+            # and it only makes sense to pass it to/from native Perl code.
+            # On matters of value identity:
+                # 1. Perl undef equal to itself, unequal to everything else.
+                # 2. Two Perl defined non-ref values considered equal iff
+                    # their string representations are identical; they are
+                    # distinct from undef and all reference/blessed Perl values.
+                # 3. Two Perl reference/blessed values considered equal iff
+                    # 'refaddr' for both are identical, that is they are
+                    # both references to the same thing; appropriate as the
+                    # general case of Perl refs/objects is something mutable.
+                    # So yes, any ::Value/etc objects will be treated
+                    # differently when wrapped by an External ::Value than
+                    # they otherwise would, same ref vs same value.
         my $VSA_DICT_C_ELEMS = 'elems';  # the dictionary elements if exists
             # A tree structure conceptually holding set of key+value pairs
             # where the keys all mutually unique and values may not be.
@@ -116,7 +135,8 @@ use Math::BigInt try => 'GMP';
                     # hkey is any value valid for $k.
                     # When DK's $k in {Boolean, Integer, String, Tuple,
                         # Capsule, Identifier}, hval is a Perl hashref;
-                        # when $k in {Array, Dict}, hval is 2-elem arrayref.
+                        # when $k in {Array, Dict}, hval is 2-elem arrayref;
+                        # when $k in {External}, hval is 3-elem arrayref.
                     # hval is hashref, k+v meaning/struct dep on DK's $k:
                         # Each {Boolean,Integer,String}-typed DK:
                             # hkey is just the DK's SV payload.
@@ -176,6 +196,16 @@ use Math::BigInt try => 'GMP';
                                 # Dictionary by first serializing all
                                 # elements in it and then catenating those
                                 # strings in mutually sorted order.
+                        # Each External-typed DK:
+                            # We are dividing all External into 3 groups.
+                            # [0] is a Perl native boolean; it's true if DK
+                                # represents the Perl undef, false if not.
+                            # [1] is a Perl hashref for DK rep Perl nonref:
+                                # hkey is just the DK's EXT payload.
+                                # hval is the DP.
+                            # [2] is a Perl hashref for DK repr Perl refs:
+                                # hkey is refaddr of the DK's EXT payload.
+                                # hval is the DP.
         my $VSA_DICT_C_KEYS = 'keys';  # DPs indexed by unique idents
             # TODO, write this.
             # Using 'keys' is recommended as users (of Low_Level) can often
@@ -187,6 +217,7 @@ use Math::BigInt try => 'GMP';
             # user that any values providing for indexing are unique between
             # all DKs used in the same Dict; if not, bugs may result;
             # in contrast, 'indexes' doesn't make that assumption.
+            # 'keys' and 'indexes' should both be eagerly evaluated.
         my $VSA_DICT_C_INDEXES = 'indexes';  # DPs ind by nonunique idents
             # TODO, rewrite this ...
             # users of Dict typically provide each elem as a triple of
@@ -207,12 +238,20 @@ use Math::BigInt try => 'GMP';
             # Tuple by first several elems keys+vals maybe;
             # Capsule certainly by 'type' (as SV) first then by Tuple way;
             # we can change $_cache itself to be just a Dict I suppose
-        my $VSA_CPSL_C_TYPE  = 1;  # ::Value object of type Identifier
-        my $VSA_CPSL_C_ATTRS = 2;  # ::Value object of type Tuple
-        my $VSA_IDENT_C_PKG_NAME_BASE       = 1;  # ::Value object of type Array of type String
-        my $VSA_IDENT_C_PKG_NAME_EXT        = 2;  # ::Value object of type Array of type String
-        my $VSA_IDENT_C_REL_STARTS_N_LEV_UP = 3;  # ::Value object of type Integer (nonnegative)
-        my $VSA_IDENT_C_PATH_BENEATH_PKG    = 4;  # ::Value object of type Array of type String
+        my $VSA_WHICH = 'which';  # serializes payload if exists
+            # Always exists when $k is Identifier.
+            # Otherwise only applies to {Array,Tuple,Dictionary,Capsule}
+            # and even then only exists conditionally such as when useful
+            # to speed up storage in a Dictionary with no 'keys'.
+            # When $k is {Tuple,Capsule}, $which is a 2-elem arrayref with
+            # the tuple/attrs heading and body serialized separately in
+            # elems 0 and 1 respectively, each as Perl native strings;
+            # for Capsule we just look at its $s[av] for the balance.
+            # When $k is {Array,Dictionary}, whole payload is serialized
+            # as a single Perl native string.
+            # When $k is {Boolean,Integer,String}, $s[sv] suffices.
+            # When $k is External, $s[ext] suffices.
+            # Serialization method is inspired by what Set::Relation does.
 
     # ATTRIBUTE LIST OF ::LowLevel OBJECTS:
         # TODO
@@ -262,6 +301,12 @@ use Math::BigInt try => 'GMP';
     my $nullary_tuple = _new_v( {
         $VSA_S_KIND  => $S_KIND_TUPLE,
         $VSA_P_AS_HV => {},
+    } );
+
+    # External that is Perl undef.
+    my $perl_undef_external = _new_v( {
+        $VSA_S_KIND   => $S_KIND_EXT,
+        $VSA_P_AS_EXT => undef,
     } );
 
 ###########################################################################
@@ -449,6 +494,29 @@ sub v_Tuple_as_HV
 
 ###########################################################################
 
+sub v_External
+{
+    my ($MDLL, $p) = @_;
+    # Expect $p to be any Perl value at all.
+    if (!defined $p)
+    {
+        return $perl_undef_external;
+    }
+    return _new_v( {
+        $VSA_S_KIND   => $S_KIND_EXT,
+        $VSA_P_AS_EXT => $p,
+    } );
+}
+
+sub v_External_as_Perl
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be an External.
+    return $$h->{$VSA_P_AS_EXT};
+}
+
+###########################################################################
+
 sub Universal__same # function
 {
     my ($MDLL, $h_lhs, $h_rhs) = @_;
@@ -489,6 +557,34 @@ sub Universal__same # function
     elsif ($k eq $S_KIND_TUPLE)
     {
         confess q{not implemented};
+    }
+    elsif ($k eq $S_KIND_EXT)
+    {
+        if (!defined $$h_lhs->{$VSA_P_AS_EXT}
+            and !defined $$h_rhs->{$VSA_P_AS_EXT})
+        {
+            confess q{we should never get here due to prior refaddr tests};
+        }
+        if (!defined $$h_lhs->{$VSA_P_AS_EXT}
+            or !defined $$h_rhs->{$VSA_P_AS_EXT})
+        {
+            # One input is Perl undef and other is not.
+            $result_p = 0;
+        }
+        elsif (!ref $$h_lhs->{$VSA_P_AS_EXT} or
+            !ref $$h_rhs->{$VSA_P_AS_EXT})
+        {
+            # Same if both inputs equal Perl non-ref strings.
+            $result_p = (!ref $$h_lhs->{$VSA_P_AS_EXT}
+                and !ref $$h_rhs->{$VSA_P_AS_EXT}
+                and $$h_lhs->{$VSA_P_AS_EXT} eq $$h_rhs->{$VSA_P_AS_EXT});
+        }
+        else
+        {
+            # Same if both inputs are the same Perl reference.
+            $result_p = (refaddr $$h_lhs->{$VSA_P_AS_EXT}
+                == refaddr $$h_rhs->{$VSA_P_AS_EXT});
+        }
     }
     else
     {
