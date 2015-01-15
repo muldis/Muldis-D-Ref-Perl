@@ -45,7 +45,7 @@ use Math::BigInt try => 'GMP';
 
     # Copy of _refcount_pp() from Devel::Refcount.
     # If we add that CPAN module as dependency, gives us 3X speed from XS.
-    sub _refcount { B::svref_2object( shift @_ )->REFCNT; };
+    sub _refcount { return B::svref_2object( @_[0] )->REFCNT; };
 
     # NAMING CONVENTIONS:
         # $MDLL : singleton obj repr Muldis_D::Low_Level package
@@ -104,7 +104,7 @@ use Math::BigInt try => 'GMP';
                 # 1. Perl undef equal to itself, unequal to everything else.
                 # 2. Two Perl defined non-ref values considered equal iff
                     # their string representations are identical; they are
-                    # distinct from undef and all reference/blessed Perl values.
+                    # distinct from undef and all ref/blessed Perl values.
                 # 3. Two Perl reference/blessed values considered equal iff
                     # 'refaddr' for both are identical, that is they are
                     # both references to the same thing; appropriate as the
@@ -115,7 +115,8 @@ use Math::BigInt try => 'GMP';
         my $VSA_DICT_C_ELEMS = 'elems';  # the dictionary elements if exists
             # A tree structure conceptually holding set of key+value pairs
             # where the keys all mutually unique and values may not be.
-            # Each key+value (DK+DV) typically a pair (DP) of ::Value, lives at a leaf.
+            # Each key+value (DK+DV) typically a pair (DP) of ::Value,
+            # lives at a leaf.  A DP is a 2-elem Perl arrayref, [DK,DV].
             # This structure is typically O(1) for testing presence/absence
             # of a single DK when looked up using the whole of the DK value
             # rather than a portion/hash of it, and fetching its DV;
@@ -165,12 +166,24 @@ use Math::BigInt try => 'GMP';
                                     # We only populate this hashref when we
                                     # want to count the number of distinct
                                     # DP we have and no 'keys' exist.
+                            # TODO - Consider special-casing treatment when
+                            # tuple has a low degree, particularly of 1,
+                            # by indexing on attr val rather than serial.
+                            # ACTUALLY, higher-level Muldis D code
+                            # including the various Relation functions
+                            # can explicitly ask for keys/etc on the
+                            # specific attrs being eg joined/semijoined on
+                            # so normal user code doesn't have to, as S::R,
+                            # hence we likely need not this special either.
                         # Each Capsule-typed DK:
                             # hkey is derived from DK "type" attr:
                                 # Same as if DK were Identifer-typed.
                             # hval is derived from DK "attrs" attr:
                                 # hval is a Perl hashref.
                                 # Same format as elems[Tuple].
+                            # TODO - Consider special-casing treatment when
+                            # attrs has a low degree, particularly of 1,
+                            # by indexing on attr val rather than serial.
                         # Each Identifier-typed DK:
                             # hkey is Ident-specific serialization of DK.
                                 # Its 4 attrs catenated in their defined
@@ -466,7 +479,7 @@ sub v_String_as_AV
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an String.
-    return [map { ord $_ } split q{}, $$h->{$VSA_P_AS_SV}];
+    return [map { ord $_ } split m//, $$h->{$VSA_P_AS_SV}];
 }
 
 ###########################################################################
@@ -560,23 +573,23 @@ sub Universal__same # function
     }
     elsif ($k eq $S_KIND_EXT)
     {
-        if (!defined $$h_lhs->{$VSA_P_AS_EXT}
-            and !defined $$h_rhs->{$VSA_P_AS_EXT})
+        if (not defined $$h_lhs->{$VSA_P_AS_EXT}
+            and not defined $$h_rhs->{$VSA_P_AS_EXT})
         {
             confess q{we should never get here due to prior refaddr tests};
         }
-        if (!defined $$h_lhs->{$VSA_P_AS_EXT}
-            or !defined $$h_rhs->{$VSA_P_AS_EXT})
+        if (not defined $$h_lhs->{$VSA_P_AS_EXT}
+            or not defined $$h_rhs->{$VSA_P_AS_EXT})
         {
             # One input is Perl undef and other is not.
             $result_p = 0;
         }
-        elsif (!ref $$h_lhs->{$VSA_P_AS_EXT} or
-            !ref $$h_rhs->{$VSA_P_AS_EXT})
+        elsif (not ref $$h_lhs->{$VSA_P_AS_EXT} or
+            not ref $$h_rhs->{$VSA_P_AS_EXT})
         {
             # Same if both inputs equal Perl non-ref strings.
-            $result_p = (!ref $$h_lhs->{$VSA_P_AS_EXT}
-                and !ref $$h_rhs->{$VSA_P_AS_EXT}
+            $result_p = (not ref $$h_lhs->{$VSA_P_AS_EXT}
+                and not ref $$h_rhs->{$VSA_P_AS_EXT}
                 and $$h_lhs->{$VSA_P_AS_EXT} eq $$h_rhs->{$VSA_P_AS_EXT});
         }
         else
@@ -612,6 +625,7 @@ sub Universal__assign # updater
 {
     my ($MDLL, $var_target, $h_value) = @_;
     $$var_target = $h_value;
+    return;
 }
 
 ###########################################################################
