@@ -526,6 +526,30 @@ sub v_Tuple_as_HV
 
 ###########################################################################
 
+sub v_Capsule
+{
+    my ($MDLL, $p_type, $p_attrs) = @_;
+    # Expect $p_type to be a Perl arrayref and $p_attrs a Perl hashref.
+    return $MDLL->Capsule__select_Capsule(
+        $MDLL->v_Identifier( $p_type ), $MDLL->v_Tuple( $p_attrs ) );
+}
+
+sub v_Capsule_type_as_AV
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be an Capsule.
+    return $MDLL->v_Identifier_as_AV( $MDLL->Capsule__Capsule_type( $h ) );
+}
+
+sub v_Capsule_attrs_as_HV
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be an Capsule.
+    return $MDLL->v_Tuple_as_HV( $MDLL->Capsule__attrs( $h ) );
+}
+
+###########################################################################
+
 sub v_Identifer
 {
     my ($MDLL, $p) = @_;
@@ -721,38 +745,15 @@ sub _same
         }
         if ($k eq $S_KIND_TUPLE)
         {
-            my $lhs_hv = $$h_lhs->{$VSA_P_AS_HV};
-            my $rhs_hv = $$h_rhs->{$VSA_P_AS_HV};
-            if ((scalar keys %{$lhs_hv}) != (scalar keys %{$rhs_hv}))
-            {
-                # Tuples have different attribute count.
-                $result_p = 0;
-                last S_KIND;
-            }
-            for my $atnm (keys %{$lhs_hv})
-            {
-                if (!exists $rhs_hv->{$atnm})
-                {
-                    # Tuples have at least 1 differently-named attribute.
-                    $result_p = 0;
-                    last S_KIND;
-                }
-            }
-            for my $atnm (keys %{$lhs_hv})
-            {
-                if (!$MDLL->_same( $lhs_hv->{$atnm}, $rhs_hv->{$atnm} ))
-                {
-                    # Values of corresponding tuple attrs aren't same.
-                    $result_p = 0;
-                    last S_KIND;
-                }
-            }
-            $result_p = 1;
+            $result_p = $MDLL->_same_tuple( $h_lhs, $h_rhs );
             last S_KIND;
         }
         if ($k eq $S_KIND_CPSL)
         {
-            confess qq{$k not implemented};
+            $result_p = (($$h_lhs->{$VSA_P_AS_AV}->[4]
+                    eq $$h_rhs->{$VSA_P_AS_AV}->[4])
+                and $MDLL->_same_tuple( $h_lhs, $h_rhs ));
+            last S_KIND;
         }
         if ($k eq $S_KIND_IDENT)
         {
@@ -805,6 +806,35 @@ sub _same
         }
     }
     return $result_p;
+}
+
+sub _same_tuple
+{
+    my ($MDLL, $h_lhs, $h_rhs) = @_;
+    my $lhs_hv = $$h_lhs->{$VSA_P_AS_HV};
+    my $rhs_hv = $$h_rhs->{$VSA_P_AS_HV};
+    if ((scalar keys %{$lhs_hv}) != (scalar keys %{$rhs_hv}))
+    {
+        # Tuples have different attribute count.
+        return 0;
+    }
+    for my $atnm (keys %{$lhs_hv})
+    {
+        if (!exists $rhs_hv->{$atnm})
+        {
+            # Tuples have at least 1 differently-named attribute.
+            return 0;
+        }
+    }
+    for my $atnm (keys %{$lhs_hv})
+    {
+        if (!$MDLL->_same( $lhs_hv->{$atnm}, $rhs_hv->{$atnm} ))
+        {
+            # Values of corresponding tuple attrs aren't same.
+            return 0;
+        }
+    }
+    return 1;
 }
 
 sub Universal__assign # updater
@@ -953,7 +983,42 @@ sub Tuple__is_nullary # function
 
 ###########################################################################
 
-sub Cast__Tuple__to_Identifier
+sub Capsule__select_Capsule # function
+{
+    my ($MDLL, $h_type, $h_attrs) = @_;
+    # Expect $h_type to be an Identifier and $h_attrs to be a Tuple.
+    confess q{Identifier isn't of the "identity" subtype}
+        if $$h_type->{$VSA_P_AS_AV}->[5] ne $IDENT_ST_IDENTITY;
+    return _new_v( {
+        $VSA_S_KIND  => $S_KIND_CPSL,
+        $VSA_P_AS_AV => $$h_type->{$VSA_P_AS_AV},
+        $VSA_P_AS_HV => $$h_attrs->{$VSA_P_AS_HV},
+    } );
+}
+
+sub Capsule__Capsule_type # function
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be a Capsule.
+    return _new_v( {
+        $VSA_S_KIND  => $S_KIND_IDENT,
+        $VSA_P_AS_AV => $$h->{$VSA_P_AS_AV},
+    } );
+}
+
+sub Capsule__attrs # function
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be a Capsule.
+    return _new_v( {
+        $VSA_S_KIND  => $S_KIND_TUPLE,
+        $VSA_P_AS_HV => $$h->{$VSA_P_AS_HV},
+    } );
+}
+
+###########################################################################
+
+sub Cast__Tuple__to_Identifier # function
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be a Tuple of 4 attributes.
@@ -969,7 +1034,7 @@ sub Cast__Tuple__to_Identifier
     ] );
 }
 
-sub Cast__Identifier__to_Tuple
+sub Cast__Identifier__to_Tuple # function
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an Identifier.
