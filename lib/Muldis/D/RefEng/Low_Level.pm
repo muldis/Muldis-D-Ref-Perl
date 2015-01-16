@@ -45,7 +45,7 @@ use Math::BigInt try => 'GMP';
 
     # Copy of _refcount_pp() from Devel::Refcount.
     # If we add that CPAN module as dependency, gives us 3X speed from XS.
-    sub _refcount { return B::svref_2object( @_[0] )->REFCNT; };
+    sub _refcount { return B::svref_2object( $_[0] )->REFCNT; };
 
     # NAMING CONVENTIONS:
         # $MDLL : singleton obj repr Muldis_D::Low_Level package
@@ -533,75 +533,139 @@ sub v_External_as_Perl
 sub Universal__same # function
 {
     my ($MDLL, $h_lhs, $h_rhs) = @_;
+    return $MDLL->_same( $h_lhs, $h_rhs ) ? $true : $false;
+}
+
+sub _same
+{
+    my ($MDLL, $h_lhs, $h_rhs) = @_;
     if (refaddr $h_lhs == refaddr $h_rhs)
     {
         # Caller used the same ::Value object/handle in multiple places.
-        return $true;
+        return 1;
     }
     if (refaddr $$h_lhs == refaddr $$h_rhs)
     {
         # Caller created 2 ::Value objects/handles likely independently but
         # then probably called same() on them so their structs were merged.
-        return $true;
+        return 1;
     }
     if ($$h_lhs->{$VSA_S_KIND} eq $$h_rhs->{$VSA_S_KIND})
     {
-        return $false;
+        return 0;
     }
     my $result_p;
-    my $k = $$h_lhs->{$VSA_S_KIND};
-    if ($k eq $S_KIND_BOOL)
+    S_KIND:
     {
-        confess q{we should never get here due to prior refaddr tests};
-    }
-    elsif ($k eq $S_KIND_INT)
-    {
-        $result_p = ($MDLL->v_Integer_as_SV($h_lhs)
-            eq $MDLL->v_Integer_as_SV($h_rhs));
-    }
-    elsif ($k eq $S_KIND_ARRAY)
-    {
-        confess q{not implemented};
-    }
-    elsif ($k eq $S_KIND_STR)
-    {
-        $result_p = ($$h_lhs->{$VSA_P_AS_SV} eq $$h_rhs->{$VSA_P_AS_SV});
-    }
-    elsif ($k eq $S_KIND_TUPLE)
-    {
-        confess q{not implemented};
-    }
-    elsif ($k eq $S_KIND_EXT)
-    {
-        if (not defined $$h_lhs->{$VSA_P_AS_EXT}
-            and not defined $$h_rhs->{$VSA_P_AS_EXT})
+        my $k = $$h_lhs->{$VSA_S_KIND};
+        if ($k eq $S_KIND_BOOL)
         {
             confess q{we should never get here due to prior refaddr tests};
         }
-        if (not defined $$h_lhs->{$VSA_P_AS_EXT}
-            or not defined $$h_rhs->{$VSA_P_AS_EXT})
+        if ($k eq $S_KIND_INT)
         {
-            # One input is Perl undef and other is not.
-            $result_p = 0;
+            $result_p = ($MDLL->v_Integer_as_SV($h_lhs)
+                eq $MDLL->v_Integer_as_SV($h_rhs));
+            last S_KIND;
         }
-        elsif (not ref $$h_lhs->{$VSA_P_AS_EXT} or
-            not ref $$h_rhs->{$VSA_P_AS_EXT})
+        if ($k eq $S_KIND_ARRAY)
         {
-            # Same if both inputs equal Perl non-ref strings.
-            $result_p = (not ref $$h_lhs->{$VSA_P_AS_EXT}
-                and not ref $$h_rhs->{$VSA_P_AS_EXT}
-                and $$h_lhs->{$VSA_P_AS_EXT} eq $$h_rhs->{$VSA_P_AS_EXT});
+            my $lhs_av = $$h_lhs->{$VSA_P_AS_AV};
+            my $rhs_av = $$h_rhs->{$VSA_P_AS_AV};
+            if (scalar @{$lhs_av} != scalar @{$rhs_av})
+            {
+                # Arrays have different elem count.
+                $result_p = 0;
+                last S_KIND;
+            }
+            for my $i (0..$#{$lhs_av})
+            {
+                if (!$MDLL->_same( $lhs_av->[$i], $rhs_av->[$i] ))
+                {
+                    # Values of corresponding array elems aren't same.
+                    $result_p = 0;
+                    last S_KIND;
+                }
+            }
+            $result_p = 1;
+            last S_KIND;
         }
-        else
+        if ($k eq $S_KIND_STR)
         {
+            $result_p = ($$h_lhs->{$VSA_P_AS_SV} eq $$h_rhs->{$VSA_P_AS_SV});
+            last S_KIND;
+        }
+        if ($k eq $S_KIND_DICT)
+        {
+            confess qq{$k not implemented};
+        }
+        if ($k eq $S_KIND_TUPLE)
+        {
+            my $lhs_hv = $$h_lhs->{$VSA_P_AS_HV};
+            my $rhs_hv = $$h_rhs->{$VSA_P_AS_HV};
+            if ((scalar keys %{$lhs_hv}) != (scalar keys %{$rhs_hv}))
+            {
+                # Tuples have different attribute count.
+                $result_p = 0;
+                last S_KIND;
+            }
+            for my $atnm (keys %{$lhs_hv})
+            {
+                if (!exists $rhs_hv->{$atnm})
+                {
+                    # Tuples have at least 1 differently-named attribute.
+                    $result_p = 0;
+                    last S_KIND;
+                }
+            }
+            for my $atnm (keys %{$lhs_hv})
+            {
+                if (!$MDLL->_same( $lhs_hv->{$atnm}, $rhs_hv->{$atnm} ))
+                {
+                    # Values of corresponding tuple attrs aren't same.
+                    $result_p = 0;
+                    last S_KIND;
+                }
+            }
+            $result_p = 1;
+            last S_KIND;
+        }
+        if ($k eq $S_KIND_CPSL)
+        {
+            confess qq{$k not implemented};
+        }
+        if ($k eq $S_KIND_IDENT)
+        {
+            confess qq{$k not implemented};
+        }
+        if ($k eq $S_KIND_EXT)
+        {
+            if (!defined $$h_lhs->{$VSA_P_AS_EXT}
+                and !defined $$h_rhs->{$VSA_P_AS_EXT})
+            {
+                confess q{we should never get here due to prior refaddr tests};
+            }
+            if (!defined $$h_lhs->{$VSA_P_AS_EXT}
+                or !defined $$h_rhs->{$VSA_P_AS_EXT})
+            {
+                # One input is Perl undef and other is not.
+                $result_p = 0;
+                last S_KIND;
+            }
+            if (!ref $$h_lhs->{$VSA_P_AS_EXT} or !ref $$h_rhs->{$VSA_P_AS_EXT})
+            {
+                # Same if both inputs equal Perl non-ref strings.
+                $result_p = (!ref $$h_lhs->{$VSA_P_AS_EXT}
+                    and !ref $$h_rhs->{$VSA_P_AS_EXT}
+                    and $$h_lhs->{$VSA_P_AS_EXT} eq $$h_rhs->{$VSA_P_AS_EXT});
+                last S_KIND;
+            }
             # Same if both inputs are the same Perl reference.
             $result_p = (refaddr $$h_lhs->{$VSA_P_AS_EXT}
                 == refaddr $$h_rhs->{$VSA_P_AS_EXT});
+            last S_KIND;
         }
-    }
-    else
-    {
-        confess q{not implemented};
+        confess q{we should never get here};
     }
     if ($result_p)
     {
@@ -618,7 +682,7 @@ sub Universal__same # function
             $$h_rhs = $$h_lhs;
         }
     }
-    return $result_p ? $true : $false;
+    return $result_p;
 }
 
 sub Universal__assign # updater
