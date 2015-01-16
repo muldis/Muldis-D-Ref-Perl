@@ -86,11 +86,18 @@ use Math::BigInt try => 'GMP';
             # Further restriction/detail based on struct kind:
                 # Array - Perl arrayref of 0..N ::Value objects
                 # Capsule (1/2) - Capsule type - same arrayref as for Identifier
-                # Identifier - Perl arrayref of 4 elements, in order:
+                # Identifier - Perl arrayref of 6 elements, in order:
                     # [0] - pkg_name_base - Perl arrayref of 0..N native string
                     # [1] - pkg_name_ext - Perl arrayref of 0..N native string
                     # [2] - rel_starts_n_lev_up - Perl native nonnegative integer
                     # [3] - path_beneath_pkg - Perl arrayref of 0..N native string
+                    # [4] - Perl native string that caches serialize of [0..3].
+                    # [5] - Identifier subtype, cached from [0..3], one of:
+                        my $IDENT_ST_IDENTITY = 'identity';
+                        my $IDENT_ST_ABSOLUTE = 'absolute';
+                        my $IDENT_ST_RELATIVE = 'relative';
+                        my $IDENT_ST_FLOATING = 'floating';
+                    # TODO - make Identifier payload a hashref instead maybe
         my $VSA_P_AS_HV = 'hv';  # Perl hashref if exists
             # Further restriction/detail based on struct kind:
                 # Tuple - Perl hashref of 0..N ::Value objects,
@@ -158,6 +165,8 @@ use Math::BigInt try => 'GMP';
                                     # Each elem is a DP, in arbitrary order
                                     # that may match the input order.
                                     # This array might have duplicates.
+                                    # TODO: Replace arrayref with hashref
+                                    # where hkeys are refaddrs of hvals.
                                 # [1] is a Perl hashref (lazy):
                                     # Each hval is a DP, whose corresp
                                     # hkey serializes whole Tuple body;
@@ -196,6 +205,8 @@ use Math::BigInt try => 'GMP';
                             # heading, same reasons, same 'keys' effects.
                             # [0] is a Perl arrayref (eager):
                                 # Each elem a DP, arbit order, possib dups.
+                                # TODO: Replace arrayref with hashref
+                                # where hkeys are refaddrs of hvals.
                             # [1] is a Perl hashref (lazy):
                                 # Each hval a DP; hkey serializes whole
                                 # Array in index order.
@@ -204,6 +215,8 @@ use Math::BigInt try => 'GMP';
                             # built structure like with Arrays.
                             # [0] is a Perl arrayref (eager):
                                 # Each elem a DP, arbit order, possib dups.
+                                # TODO: Replace arrayref with hashref
+                                # where hkeys are refaddrs of hvals.
                             # [1] is a Perl hashref (lazy):
                                 # Each hval a DP; hkey serializes whole
                                 # Dictionary by first serializing all
@@ -252,8 +265,7 @@ use Math::BigInt try => 'GMP';
             # Capsule certainly by 'type' (as SV) first then by Tuple way;
             # we can change $_cache itself to be just a Dict I suppose
         my $VSA_WHICH = 'which';  # serializes payload if exists
-            # Always exists when $k is Identifier.
-            # Otherwise only applies to {Array,Tuple,Dictionary,Capsule}
+            # Only applies to {Array,Tuple,Dictionary,Capsule}
             # and even then only exists conditionally such as when useful
             # to speed up storage in a Dictionary with no 'keys'.
             # When $k is {Tuple,Capsule}, $which is a 2-elem arrayref with
@@ -263,6 +275,7 @@ use Math::BigInt try => 'GMP';
             # When $k is {Array,Dictionary}, whole payload is serialized
             # as a single Perl native string.
             # When $k is {Boolean,Integer,String}, $s[sv] suffices.
+            # When $k is Identifier, $s[av][4] suffices.
             # When $k is External, $s[ext] suffices.
             # Serialization method is inspired by what Set::Relation does.
 
@@ -278,7 +291,7 @@ use Math::BigInt try => 'GMP';
         $S_KIND_IDENT => {},
     };
 
-    # Boolean false and true values.
+    # Boolean false (type default val) and true values.
     my $false = $_cache->{$S_KIND_BOOL}->{(1==0)} = _new_v( {
         $VSA_S_KIND  => $S_KIND_BOOL,
         $VSA_P_AS_SV => (1==0),
@@ -288,7 +301,7 @@ use Math::BigInt try => 'GMP';
         $VSA_P_AS_SV => (1==1),
     } );
 
-    # Integer 0 and 1 values.
+    # Integer 0 (type default val) and 1 values.
     my $zero = $_cache->{$S_KIND_INT}->{0} = _new_v( {
         $VSA_S_KIND  => $S_KIND_INT,
         $VSA_P_AS_SV => 0,
@@ -298,25 +311,31 @@ use Math::BigInt try => 'GMP';
         $VSA_P_AS_SV => 1,
     } );
 
-    # Array with no elements.
+    # Array with no elements (type default val).
     my $empty_array = _new_v( {
         $VSA_S_KIND  => $S_KIND_ARRAY,
         $VSA_P_AS_AV => [],
     } );
 
-    # String with no elements.
+    # String with no elements (type default val).
     my $empty_str = $_cache->{$S_KIND_STR}->{0} = _new_v( {
         $VSA_S_KIND  => $S_KIND_STR,
         $VSA_P_AS_SV => q{},
     } );
 
-    # Tuple with no elements.
+    # Tuple with no elements (type default val).
     my $nullary_tuple = _new_v( {
         $VSA_S_KIND  => $S_KIND_TUPLE,
         $VSA_P_AS_HV => {},
     } );
 
-    # External that is Perl undef.
+    # Identifier (relative) meaning "self" (type default val).
+    my $self_ident = _new_v( {
+        $VSA_S_KIND  => $S_KIND_IDENT,
+        $VSA_P_AS_AV => [[],[],0,[],'0',$IDENT_ST_RELATIVE],
+    } );
+
+    # External that is Perl undef (type default val).
     my $perl_undef_external = _new_v( {
         $VSA_S_KIND   => $S_KIND_EXT,
         $VSA_P_AS_EXT => undef,
@@ -507,6 +526,107 @@ sub v_Tuple_as_HV
 
 ###########################################################################
 
+sub v_Identifer
+{
+    my ($MDLL, $p) = @_;
+    # Expect $p to be a Perl arrayref of 4 elements.
+    my ($pkg_name_base, $pkg_name_ext, $rel_starts_n_lev_up,
+        $path_beneath_pkg) = @{$p};
+
+    # - There are 4 kinds of Identifier that are all mutually disjoint:
+    #     - identity : when +base, +ext, -levels, -path
+    #               or when +base, +ext, -levels, +path
+    #     - absolute : when +base, -ext, -levels, -path
+    #               or when +base, -ext, -levels, +path
+    #     - relative : when -base, -ext, -levels, -path
+    #               or when -base, -ext, +levels, +path
+    #     - floating : when -base, -ext, -levels, +path
+    # - For base,ext,path : + means nonempty, - means empty
+    # - For levels        : + means nonzero , - means zero
+    # - The other 9 possible combos of Identifier elems are illegal.
+    # - The relative val of 4x- means "self", is Identifier default val.
+    # - The identity subtype is the full declared name of the package
+    #       actually linked in, not what was requested by users.
+    # - A Capsule specifically requires "identity" Identifiers for "type".
+
+    confess q{illegal Identifier}
+        if $rel_starts_n_lev_up < 0;
+
+    my $serial;
+    my $subtype;
+    if (scalar @{$pkg_name_base} and $rel_starts_n_lev_up != 0)
+    {
+        # 4/16 combos
+        confess q{illegal Identifier};
+    }
+    elsif (scalar @{$pkg_name_base})
+    {
+        # 4/16 combos
+        $serial = join q{},
+            (map { q{::}._normalize_name_str($_) } @{$pkg_name_base}),
+            (map { q{:}._normalize_name_str($_) } @{$pkg_name_ext}),
+            (map { q{.}._normalize_name_str($_) } @{$path_beneath_pkg});
+        $subtype = (scalar @{$pkg_name_ext})
+            ? $IDENT_ST_IDENTITY : $IDENT_ST_ABSOLUTE;
+    }
+    elsif (scalar @{$pkg_name_ext})
+    {
+        # 4/16 combos
+        confess q{illegal Identifier};
+    }
+    elsif (scalar @{$path_beneath_pkg})
+    {
+        # 2/16 combos
+        my $serial = join q{.},
+            ($rel_starts_n_lev_up != 0 ? $rel_starts_n_lev_up : ()),
+            (map { _normalize_name_str($_) } @{$path_beneath_pkg});
+        my $subtype = $rel_starts_n_lev_up != 0
+            ? $IDENT_ST_RELATIVE : $IDENT_ST_FLOATING;
+    }
+    elsif ($rel_starts_n_lev_up == 0)
+    {
+        # 1/16 combos
+        # $serial = '0', $subtype = $IDENT_ST_RELATIVE
+        return $self_ident;
+    }
+    else
+    {
+        # 1/16 combos
+        confess q{illegal Identifier};
+    }
+
+    my $av = [$pkg_name_base, $pkg_name_ext, $rel_starts_n_lev_up,
+        $path_beneath_pkg, $serial, $subtype];
+
+    if (exists $_cache->{$S_KIND_IDENT}->{$serial})
+    {
+        return $_cache->{$S_KIND_IDENT}->{$serial};
+    }
+    my $h = _new_v( {
+        $VSA_S_KIND  => $S_KIND_IDENT,
+        $VSA_P_AS_AV => $av,
+    } );
+    $_cache->{$S_KIND_IDENT}->{$serial} = $h;
+    return $h;
+}
+
+sub _normalize_name_str
+{
+    my ($str) = @_;
+    $str =~ s/\\/\\\\/;
+    $str =~ s/"/\\"/;
+    return qq{"$str"};
+}
+
+sub v_Identifer_as_AV
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be an Identifer.
+    return [@{$$h->{$VSA_P_AS_AV}}[0..3]];
+}
+
+###########################################################################
+
 sub v_External
 {
     my ($MDLL, $p) = @_;
@@ -636,7 +756,9 @@ sub _same
         }
         if ($k eq $S_KIND_IDENT)
         {
-            confess qq{$k not implemented};
+            $result_p = ($$h_lhs->{$VSA_P_AS_AV}->[4]
+                eq $$h_rhs->{$VSA_P_AS_AV}->[4]);
+            last S_KIND;
         }
         if ($k eq $S_KIND_EXT)
         {
@@ -827,6 +949,40 @@ sub Tuple__is_nullary # function
 {
     my ($MDLL, $h) = @_;
     return (refaddr $h == refaddr $nullary_tuple) ? $true : $false;
+}
+
+###########################################################################
+
+sub Cast__Tuple__to_Identifier
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be a Tuple of 4 attributes.
+    my $hv = $$h->{$VSA_P_AS_HV};
+    return $MDLL->v_Identifier( [
+        [map { $$_->{$VSA_P_AS_SV} }
+            @{${$hv->{pkg_name_base}}->{$VSA_P_AS_AV}}],
+        [map { $$_->{$VSA_P_AS_SV} }
+            @{${$hv->{pkg_name_ext}}->{$VSA_P_AS_AV}}],
+        $MDLL->v_Integer_as_SV( $hv->{rel_starts_n_lev_up} ),
+        [map { $$_->{$VSA_P_AS_SV} }
+            @{${$hv->{path_beneath_pkg}}->{$VSA_P_AS_AV}}],
+    ] );
+}
+
+sub Cast__Identifier__to_Tuple
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be an Identifier.
+    my $av = $$h->{$VSA_P_AS_AV};
+    return $MDLL->v_Tuple( {
+        pkg_name_base
+            => $MDLL->v_Array( [map { $MDLL->v_String($_) } @{$av->[0]}] ),
+        pkg_name_ext
+            => $MDLL->v_Array( [map { $MDLL->v_String($_) } @{$av->[1]}] ),
+        rel_starts_n_lev_up => $MDLL->v_Integer( $av->[2] ),
+        path_beneath_pkg
+            => $MDLL->v_Array( [map { $MDLL->v_String($_) } @{$av->[3]}] ),
+    } );
 }
 
 ###########################################################################
