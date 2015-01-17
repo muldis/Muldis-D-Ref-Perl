@@ -424,7 +424,6 @@ sub v_Dictionary
     }
     return _new_v( {
         $VSA_S_KIND => $S_KIND_DICT,
-        $VSA_WHICH  => '\\~{}',
         $VSA_DICT   => {
             $DICT_C_ELEMS_BY_R => {map {((refaddr ${$_->[0]}) => $_)} @$p},
             $DICT_C_IKDF       => 0,
