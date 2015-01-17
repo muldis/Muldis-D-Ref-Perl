@@ -47,6 +47,10 @@ use Math::BigInt try => 'GMP';
     # If we add that CPAN module as dependency, gives us 3X speed from XS.
     sub _refcount { return B::svref_2object( $_[0] )->REFCNT; };
 
+    # CONSTANTS:
+    my $MDLL_pkg_name = q{::Muldis_D::Low_Level:"http://muldis.com":"0"};
+    my $MD_pkg_name   = q{::Muldis_D:"http://muldis.com":"0"};
+
     # NAMING CONVENTIONS:
         # $MDLL : singleton obj repr Muldis_D::Low_Level package
         # $h : value handle : a Perl refref blessed into the ::Value class,
@@ -71,12 +75,12 @@ use Math::BigInt try => 'GMP';
             my $S_KIND_DICT  = 'd';  # value of type Dictionary
             my $S_KIND_TUPLE = 't';  # value of type Tuple
             my $S_KIND_CPSL  = 'c';  # value of type Capsule
-            my $S_KIND_IDENT = 'n';  # value of type Identifier
+            my $S_KIND_IDENT = 'n';  # value of type SC_Identifier
             my $S_KIND_EXT   = 'e';  # value of type External
         my $VSA_SUBTYPE = 'subtype';  # declares main value subtype if exists
             # This is a cache of information gleanable from $p itself.
             # Allowed options depend on the struct kind:
-            # Identifier:
+            # SC_Identifier:
                 my $IDENT_ST_IDENTITY = 'identity';  # all Capsule are this
                 my $IDENT_ST_ABSOLUTE = 'absolute';
                 my $IDENT_ST_RELATIVE = 'relative';
@@ -102,8 +106,8 @@ use Math::BigInt try => 'GMP';
                     # hence String elements outside Perl's said range not supported
         my $VSA_BIGINT = 'bigint';  # Integer - Math::BigInt object if exists
         my $VSA_ARRAY = 'array';  # Array - Perl arrayref if exists of 0..N ::Value objects
-        my $VSA_DICT = 'dict';  # Dictionary - Perl hashref if exists of 6 elements:
-            my $DICT_C_ELEMS = 'elems';  # Perl hashref if exists of 0..N DP,
+        my $VSA_DICT = 'dict';  # Dictionary - Perl hashref if exists of 5 elements:
+            my $DICT_C_ELEMS_BY_R = 'elems_by_r';  # Perl hashref of 0..N DP,
                 # where a DP (Dict pair) is a 2-elem Perl arrayref of ::Value objects,
                 # which in order are DK (Dict key) and DV (Dict value).
                 # Each hashref element represents one Dictionary element:
@@ -117,22 +121,25 @@ use Math::BigInt try => 'GMP';
             my $DICT_C_IKDF = 'ikdf';  # is_known_dup_free - Perl native boolean
                 # This is true if 'elems' is known to have no duplicate DK;
                 # it is false by default unless the Dict is empty.
-            my $DICT_C_INDEXES = 'indexes';  # TODO, and see Set::Relation::V2.
-            my $DICT_C_KEYS = 'keys';  # TODO, and see Set::Relation::V2.
+            my $DICT_C_ELEMS_BY_V = 'elems_by_v';  # Perl hashref if exists of 0..N DP,
+                # like 'elems' but each hkey is 'which' of DK rather than
+                # refaddr, and hence 
+            my $DICT_C_INDEXES = 'indexes';  # TODO, hashref and see Set::Relation::V2.
+            my $DICT_C_KEYS = 'keys';  # TODO, hashref and see Set::Relation::V2.
             # TODO: In the future we could make the 'dict' structure more
             # complicated such as like a B+tree if performance warrants it,
             # but for now the current design is much simpler to implement.
         my $VSA_TUPLE = 'tuple';  # Tuple, Capsule (attrs;2/2), for both:
             # Perl hashref if exists of 0..N ::Value objects,
                 # note about String limitations affects Tuple attr names also
-        my $VSA_IDENT = 'ident';  # Identifier, Capsule (type;1/2), for both:
+        my $VSA_IDENT = 'ident';  # SC_Identifier, Capsule (type;1/2), for both:
             # Perl arrayref if exists of 5 elements, in order:
                 # [0] - pkg_name_base - Perl arrayref of 0..N native string
                 # [1] - pkg_name_ext - Perl arrayref of 0..N native string
                 # [2] - rel_starts_n_lev_up - Perl native nonnegative integer
                 # [3] - path_beneath_pkg - Perl arrayref of 0..N native string
                 # [4] - Perl native string that caches serialize of [0..3].
-                # TODO - make Identifier payload a hashref instead maybe
+                # TODO - make SC_Identifier payload a hashref instead maybe
         my $VSA_EXT = 'ext';  # External - any native Perl value at all
             # Anything one can assign to a Perl scalar variable / $foo.
             # We store it as is but its a black box to Muldis D at large,
@@ -206,8 +213,21 @@ use Math::BigInt try => 'GMP';
     # String with no elements (type default val).
     my $empty_str = $_cache->{$S_KIND_STR}->{0} = _new_v( {
         $VSA_S_KIND => $S_KIND_STR,
-        $VSA_WHICH  => q{''},
+        $VSA_WHICH  => q{\\+[]},
         $VSA_SCALAR => q{},
+    } );
+
+    # Dictionary with no elements (type default val).
+    my $empty_dict = _new_v( {
+        $VSA_S_KIND => $S_KIND_DICT,
+        $VSA_WHICH  => '\\~{}',
+        $VSA_DICT   => {
+            $DICT_C_ELEMS_BY_R => {},
+            $DICT_C_IKDF       => 1,
+            $DICT_C_ELEMS_BY_V => {},
+            $DICT_C_INDEXES    => {},
+            $DICT_C_KEYS       => {},
+        },
     } );
 
     # Tuple with no elements (type default val).
@@ -217,7 +237,7 @@ use Math::BigInt try => 'GMP';
         $VSA_TUPLE  => {},
     } );
 
-    # Identifier (relative) meaning "self" (type default val).
+    # SC_Identifier (relative) meaning "self" (type default val).
     my $self_ident = _new_v( {
         $VSA_S_KIND  => $S_KIND_IDENT,
         $VSA_SUBTYPE => $IDENT_ST_RELATIVE,
@@ -394,6 +414,35 @@ sub v_String_as_AV
 
 ###########################################################################
 
+sub v_Dictionary
+{
+    my ($MDLL, $p) = @_;
+    # Expect $p to be a Perl arrayref of 2-element Perl arrayrefs.
+    if (@$p == 0)
+    {
+        return $empty_dict;
+    }
+    return _new_v( {
+        $VSA_S_KIND => $S_KIND_DICT,
+        $VSA_WHICH  => '\\~{}',
+        $VSA_DICT   => {
+            $DICT_C_ELEMS_BY_R => {map {((refaddr ${$_->[0]}) => $_)} @$p},
+            $DICT_C_IKDF       => 0,
+            $DICT_C_INDEXES    => {},
+            $DICT_C_KEYS       => {},
+        },
+    } );
+}
+
+sub v_Dictionary_as_AV
+{
+    my ($MDLL, $h) = @_;
+    # Expect $h to be an Dictionary.
+    return [values %{$$h->{$VSA_DICT}->{$DICT_C_ELEMS_BY_R}}];
+}
+
+###########################################################################
+
 sub v_Tuple
 {
     my ($MDLL, $p) = @_;
@@ -422,14 +471,14 @@ sub v_Capsule
     my ($MDLL, $p_type, $p_attrs) = @_;
     # Expect $p_type to be a Perl arrayref and $p_attrs a Perl hashref.
     return $MDLL->Capsule__select_Capsule(
-        $MDLL->v_Identifier( $p_type ), $MDLL->v_Tuple( $p_attrs ) );
+        $MDLL->v_SC_Identifier( $p_type ), $MDLL->v_Tuple( $p_attrs ) );
 }
 
 sub v_Capsule_type_as_AV
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an Capsule.
-    return $MDLL->v_Identifier_as_AV( $MDLL->Capsule__Capsule_type( $h ) );
+    return $MDLL->v_SC_Identifier_as_AV( $MDLL->Capsule__Capsule_type( $h ) );
 }
 
 sub v_Capsule_attrs_as_HV
@@ -448,7 +497,7 @@ sub v_Identifer
     my ($pkg_name_base, $pkg_name_ext, $rel_starts_n_lev_up,
         $path_beneath_pkg) = @{$p};
 
-    # - There are 4 kinds of Identifier that are all mutually disjoint:
+    # - There are 4 kinds of SC_Identifier that are all mutually disjoint:
     #     - identity : when +base, +ext, -levels, -path
     #               or when +base, +ext, -levels, +path
     #     - absolute : when +base, -ext, -levels, -path
@@ -458,13 +507,13 @@ sub v_Identifer
     #     - floating : when -base, -ext, -levels, +path
     # - For base,ext,path : + means nonempty, - means empty
     # - For levels        : + means nonzero , - means zero
-    # - The other 9 possible combos of Identifier elems are illegal.
-    # - The relative val of 4x- means "self", is Identifier default val.
+    # - The other 9 possible combos of SC_Identifier elems are illegal.
+    # - The relative val of 4x- means "self", is SC_Identifier default val.
     # - The identity subtype is the full declared name of the package
     #       actually linked in, not what was requested by users.
-    # - A Capsule specifically requires "identity" Identifiers for "type".
+    # - A Capsule specifically requires "identity" SC_Identifiers for "type".
 
-    confess q{illegal Identifier}
+    confess q{illegal SC_Identifier}
         if $rel_starts_n_lev_up < 0;
 
     my $subtype;
@@ -472,7 +521,7 @@ sub v_Identifer
     if (scalar @{$pkg_name_base} and $rel_starts_n_lev_up != 0)
     {
         # 4/16 combos
-        confess q{illegal Identifier};
+        confess q{illegal SC_Identifier};
     }
     elsif (scalar @{$pkg_name_base})
     {
@@ -487,7 +536,7 @@ sub v_Identifer
     elsif (scalar @{$pkg_name_ext})
     {
         # 4/16 combos
-        confess q{illegal Identifier};
+        confess q{illegal SC_Identifier};
     }
     elsif (scalar @{$path_beneath_pkg})
     {
@@ -507,7 +556,7 @@ sub v_Identifer
     else
     {
         # 1/16 combos
-        confess q{illegal Identifier};
+        confess q{illegal SC_Identifier};
     }
 
     my $av = [$pkg_name_base, $pkg_name_ext, $rel_starts_n_lev_up,
@@ -638,7 +687,8 @@ sub _same
         }
         if ($k eq $S_KIND_DICT)
         {
-            confess qq{$k not implemented};
+            $result_p = ($MDLL->_which( $h_lhs ) eq $MDLL->_which( $h_rhs ));
+            last S_KIND;
         }
         if ($k eq $S_KIND_TUPLE)
         {
@@ -735,6 +785,113 @@ sub _same_tuple
     }
     return 1;
 }
+
+###########################################################################
+
+sub _which
+{
+    my ($MDLL, $h) = @_;
+    if (exists $$h->{$VSA_WHICH})
+    {
+        return $$h->{$VSA_WHICH};
+    }
+    my $which;
+    S_KIND:
+    {
+        my $k = $$h->{$VSA_S_KIND};
+        if ($k eq $S_KIND_BOOL)
+        {
+            confess q{we should never get here due to prior exists tests};
+        }
+        if ($k eq $S_KIND_INT)
+        {
+            $which = $$h->{$VSA_SCALAR};
+            last S_KIND;
+        }
+        if ($k eq $S_KIND_ARRAY)
+        {
+            $which = '[' . (
+                join q{,}, map { $MDLL->_which($_) } @{$$h->{$VSA_ARRAY}}
+                ) . ']';
+            last S_KIND;
+        }
+        if ($k eq $S_KIND_STR)
+        {
+            $which = '\\+['.(join q{,}, @{$MDLL->v_String_as_AV($h)}).']';
+            last S_KIND;
+        }
+        if ($k eq $S_KIND_DICT)
+        {
+            confess qq{$k not implemented};
+        }
+        if ($k eq $S_KIND_TUPLE)
+        {
+            confess qq{$k not implemented};
+        }
+        if ($k eq $S_KIND_CPSL)
+        {
+            my $subtype = $$h->{$VSA_IDENT}->[4];
+            if ($subtype eq $MD_pkg_name.'.Blob')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            if ($subtype eq $MD_pkg_name.'.Text')
+            {
+                my $h_maximal_chars = $$h->{$VSA_TUPLE}->{maximal_chars};
+                $which = $$h_maximal_chars->{$VSA_SCALAR};
+                $which =~ s/\\/\\\\/;
+                $which =~ s/'/\\'/;
+                $which = qq{'$which'};
+                last S_KIND;
+            }
+            if ($subtype eq $MD_pkg_name.'.Ratio')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            if ($subtype eq $MD_pkg_name.'.Float')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            if ($subtype eq $MD_pkg_name.'.Interval')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            if ($subtype eq $MD_pkg_name.'.Set')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            if ($subtype eq $MD_pkg_name.'.Bag')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            if ($subtype eq $MD_pkg_name.'.Relation')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            if ($subtype eq $MD_pkg_name.'.SC_Heading')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            if ($subtype eq $MD_pkg_name.'.SC_Renaming')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            confess qq{$k not implemented};
+        }
+        if ($k eq $S_KIND_IDENT)
+        {
+            confess q{we should never get here due to prior exists tests};
+        }
+        if ($k eq $S_KIND_EXT)
+        {
+            confess qq{$k not implemented};
+        }
+        confess q{we should never get here};
+    }
+    return $$h->{$VSA_WHICH} = $which;
+}
+
+###########################################################################
 
 sub Universal__assign # updater
 {
@@ -883,8 +1040,8 @@ sub Tuple__is_nullary # function
 sub Capsule__select_Capsule # function
 {
     my ($MDLL, $h_type, $h_attrs) = @_;
-    # Expect $h_type to be an Identifier and $h_attrs to be a Tuple.
-    confess q{Identifier isn't of the "identity" subtype}
+    # Expect $h_type to be an SC_Identifier and $h_attrs to be a Tuple.
+    confess q{SC_Identifier isn't of the "identity" subtype}
         if $$h_type->{$VSA_SUBTYPE} ne $IDENT_ST_IDENTITY;
     return _new_v( {
         $VSA_S_KIND => $S_KIND_CPSL,
@@ -915,12 +1072,12 @@ sub Capsule__attrs # function
 
 ###########################################################################
 
-sub Cast__Tuple__to_Identifier # function
+sub Cast__Tuple__to_SC_Identifier # function
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be a Tuple of 4 attributes.
     my $hv = $$h->{$VSA_TUPLE};
-    return $MDLL->v_Identifier( [
+    return $MDLL->v_SC_Identifier( [
         [map { $$_->{$VSA_SCALAR} }
             @{${$hv->{pkg_name_base}}->{$VSA_ARRAY}}],
         [map { $$_->{$VSA_SCALAR} }
@@ -931,10 +1088,10 @@ sub Cast__Tuple__to_Identifier # function
     ] );
 }
 
-sub Cast__Identifier__to_Tuple # function
+sub Cast__SC_Identifier__to_Tuple # function
 {
     my ($MDLL, $h) = @_;
-    # Expect $h to be an Identifier.
+    # Expect $h to be an SC_Identifier.
     my $av = $$h->{$VSA_IDENT};
     return $MDLL->v_Tuple( {
         pkg_name_base
