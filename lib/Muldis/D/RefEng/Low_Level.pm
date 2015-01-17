@@ -80,6 +80,7 @@ use Math::BigInt try => 'GMP';
         my $VSA_SUBTYPE = 'subtype';  # declares main value subtype if exists
             # This is a cache of information gleanable from $p itself.
             # Allowed options depend on the struct kind:
+            # SC_Dictionary: set,bag,dict
             # SC_Identifier:
                 my $IDENT_ST_IDENTITY = 'identity';  # all Capsule are this
                 my $IDENT_ST_ABSOLUTE = 'absolute';
@@ -118,6 +119,21 @@ use Math::BigInt try => 'GMP';
                 # elimination is lazy for performance reasons, as hashing or
                 # comparing the actual values to ensure uniqueness may be
                 # expensive for some value types.
+                # WARNING: It is invalid / currently undefined behavior when
+                # multiple DP share the same DK but their DV are distinct;
+                # it is undefined which of the DV will be kept or eliminated,
+                # and this behavior is visible to users.  This behavior can
+                # become formalized in theory by doing 2 things, one of which
+                # is to split Set/Bag/Relation/etc off from Dict, such that
+                # its not an issue for the former types in that sense, as
+                # there is no DV in the normal sense, and the other thing
+                # is that for remaining/normal Dict with DV, it is a fatal
+                # error to have duplicate DK with differing DV, and as such
+                # any operators that might lead to this must have explicit
+                # semantics to avoid ambiguous behavior on what DV wins/etc.
+                # TODO: Consider replacing DICT with SET and reimplement
+                # DICT as a binary Relation with a unary key instead, might
+                # make a lot simpler ... or not?
             my $DICT_C_IKDF = 'ikdf';  # is_known_dup_free - Perl native boolean
                 # This is true if 'elems' is known to have no duplicate DK;
                 # it is false by default unless the Dict is empty.
