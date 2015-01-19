@@ -1,0 +1,12 @@
+#!/usr/bin/env perl
+use 5.008001;
+use utf8;
+use strict;
+use warnings FATAL => 'all';
+
+use FindBin;
+use lib ( "$FindBin::Bin/../lib" );
+
+use Muldis::D::RefEng 0.000000;
+
+print "This program doesn't do anything yet, please come back later.\n";

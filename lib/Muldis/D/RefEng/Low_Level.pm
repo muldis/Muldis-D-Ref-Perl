@@ -72,7 +72,7 @@ use Math::BigInt try => 'GMP';
             my $S_KIND_INT   = 'i';  # value of type Integer
             my $S_KIND_ARRAY = 'a';  # value of type Array
             my $S_KIND_STR   = 's';  # value of type String
-            my $S_KIND_DICT  = 'd';  # value of type Dictionary
+            my $S_KIND_BAG   = 'm';  # value of type Bag
             my $S_KIND_TUPLE = 't';  # value of type Tuple
             my $S_KIND_CPSL  = 'c';  # value of type Capsule
             my $S_KIND_IDENT = 'n';  # value of type SC_Identifier
@@ -80,7 +80,7 @@ use Math::BigInt try => 'GMP';
         my $VSA_SUBTYPE = 'subtype';  # declares main value subtype if exists
             # This is a cache of information gleanable from $p itself.
             # Allowed options depend on the struct kind:
-            # SC_Dictionary: set,bag,dict
+            # Bag: set,relation,other
             # SC_Identifier:
                 my $IDENT_ST_IDENTITY = 'identity';  # all Capsule are this
                 my $IDENT_ST_ABSOLUTE = 'absolute';
@@ -95,7 +95,7 @@ use Math::BigInt try => 'GMP';
             # $s[scalar] and $s[ident][4] for the requisite types.
             # Moreover, it will use special syntax for a variety of special
             # cases that are subtypes of Capsule, for example
-            # {Blob,Text,Ratio,Float,Interval,Set,Bag,Relation} and
+            # {Blob,Text,Ratio,Float,Interval,Set,Relation,Dictionary} and
             # {SC_Heading,SC_Renaming} etc have their own PT_STD syntax.
         my $VSA_SCALAR = 'scalar';  # Perl defined nonref scalar if exists
             # Further restriction/detail based on struct kind:
@@ -107,42 +107,28 @@ use Math::BigInt try => 'GMP';
                     # hence String elements outside Perl's said range not supported
         my $VSA_BIGINT = 'bigint';  # Integer - Math::BigInt object if exists
         my $VSA_ARRAY = 'array';  # Array - Perl arrayref if exists of 0..N ::Value objects
-        my $VSA_DICT = 'dict';  # Dictionary - Perl hashref if exists of 5 elements:
-            my $DICT_C_ELEMS_BY_R = 'elems_by_r';  # Perl hashref of 0..N DP,
-                # where a DP (Dict pair) is a 2-elem Perl arrayref of ::Value objects,
-                # which in order are DK (Dict key) and DV (Dict value).
-                # Each hashref element represents one Dictionary element:
-                    # hkey is refaddr of the value struct / $s of the DK ::Value.
-                    # hval is the DP itself.
-                # While conceptually every DK is unique within a Dictionary,
-                # there may exist multiple DP with the same DK since duplicate
-                # elimination is lazy for performance reasons, as hashing or
+        my $VSA_BAG = 'bag';  # Bag - Perl hashref if exists of 5 elements:
+            my $BAG_C_ELEMS_BY_R = 'elems_by_r';  # Perl hashref of 0..N QV,
+                # where a QV (quantified value) is a 2-elem Perl arrayref,
+                # its elements in order are UV (unique value, a ::Value object)
+                # and VQ (value quantity, a Perl native positive integer).
+                # Each hashref element represents one Bag element:
+                    # hkey is refaddr of the value struct / $s of the UV ::Value.
+                    # hval is the QV itself.
+                # While conceptually every UV is unique within a Bag,
+                # there may exist multiple QV with the same UV since duplicate
+                # merging is lazy for performance reasons, as hashing or
                 # comparing the actual values to ensure uniqueness may be
                 # expensive for some value types.
-                # WARNING: It is invalid / currently undefined behavior when
-                # multiple DP share the same DK but their DV are distinct;
-                # it is undefined which of the DV will be kept or eliminated,
-                # and this behavior is visible to users.  This behavior can
-                # become formalized in theory by doing 2 things, one of which
-                # is to split Set/Bag/Relation/etc off from Dict, such that
-                # its not an issue for the former types in that sense, as
-                # there is no DV in the normal sense, and the other thing
-                # is that for remaining/normal Dict with DV, it is a fatal
-                # error to have duplicate DK with differing DV, and as such
-                # any operators that might lead to this must have explicit
-                # semantics to avoid ambiguous behavior on what DV wins/etc.
-                # TODO: Consider replacing DICT with SET and reimplement
-                # DICT as a binary Relation with a unary key instead, might
-                # make a lot simpler ... or not?
-            my $DICT_C_IKDF = 'ikdf';  # is_known_dup_free - Perl native boolean
-                # This is true if 'elems' is known to have no duplicate DK;
-                # it is false by default unless the Dict is empty.
-            my $DICT_C_ELEMS_BY_V = 'elems_by_v';  # Perl hashref if exists of 0..N DP,
-                # like 'elems' but each hkey is 'which' of DK rather than
-                # refaddr, and hence 
-            my $DICT_C_INDEXES = 'indexes';  # TODO, hashref and see Set::Relation::V2.
-            my $DICT_C_KEYS = 'keys';  # TODO, hashref and see Set::Relation::V2.
-            # TODO: In the future we could make the 'dict' structure more
+            my $BAG_C_IKDF = 'ikdf';  # is_known_dup_free - Perl native boolean
+                # This is true if 'elems' is known to have no duplicate UV;
+                # it is false by default unless the Bag is empty.
+            my $BAG_C_ELEMS_BY_V = 'elems_by_v';  # Perl hashref if exists of 0..N QV,
+                # like 'elems' but each hkey is 'which' of UV rather than
+                # refaddr, and hence the Bag has no duplicate UV.
+            my $BAG_C_INDEXES = 'indexes';  # TODO, hashref and see Set::Relation::V2.
+            my $BAG_C_KEYS = 'keys';  # TODO, hashref and see Set::Relation::V2.
+            # TODO: In the future we could make the 'bag' structure more
             # complicated such as like a B+tree if performance warrants it,
             # but for now the current design is much simpler to implement.
         my $VSA_TUPLE = 'tuple';  # Tuple, Capsule (attrs;2/2), for both:
@@ -189,7 +175,7 @@ use Math::BigInt try => 'GMP';
         # maintain an empty hashref so some other code can be simpler.
         # TODO - there is no such code yet.
         $S_KIND_ARRAY => {},
-        $S_KIND_DICT  => {},
+        $S_KIND_BAG   => {},
         $S_KIND_TUPLE => {},
         $S_KIND_CPSL  => {},
         $S_KIND_EXT   => {},
@@ -233,16 +219,16 @@ use Math::BigInt try => 'GMP';
         $VSA_SCALAR => q{},
     } );
 
-    # Dictionary with no elements (type default val).
-    my $empty_dict = _new_v( {
-        $VSA_S_KIND => $S_KIND_DICT,
-        $VSA_WHICH  => '\\~{}',
-        $VSA_DICT   => {
-            $DICT_C_ELEMS_BY_R => {},
-            $DICT_C_IKDF       => 1,
-            $DICT_C_ELEMS_BY_V => {},
-            $DICT_C_INDEXES    => {},
-            $DICT_C_KEYS       => {},
+    # Bag with no elements (type default val).
+    my $empty_bag = _new_v( {
+        $VSA_S_KIND => $S_KIND_BAG,
+        $VSA_WHICH  => '\\+{}',
+        $VSA_BAG    => {
+            $BAG_C_ELEMS_BY_R => {},
+            $BAG_C_IKDF       => 1,
+            $BAG_C_ELEMS_BY_V => {},
+            $BAG_C_INDEXES    => {},
+            $BAG_C_KEYS       => {},
         },
     } );
 
@@ -430,30 +416,30 @@ sub v_String_as_AV
 
 ###########################################################################
 
-sub v_Dictionary
+sub v_Bag
 {
     my ($MDLL, $p) = @_;
     # Expect $p to be a Perl arrayref of 2-element Perl arrayrefs.
     if (@$p == 0)
     {
-        return $empty_dict;
+        return $empty_bag;
     }
     return _new_v( {
-        $VSA_S_KIND => $S_KIND_DICT,
-        $VSA_DICT   => {
-            $DICT_C_ELEMS_BY_R => {map {((refaddr ${$_->[0]}) => $_)} @$p},
-            $DICT_C_IKDF       => 0,
-            $DICT_C_INDEXES    => {},
-            $DICT_C_KEYS       => {},
+        $VSA_S_KIND => $S_KIND_BAG,
+        $VSA_BAG    => {
+            $BAG_C_ELEMS_BY_R => {map {((refaddr ${$_->[0]}) => $_)} @$p},
+            $BAG_C_IKDF       => 0,
+            $BAG_C_INDEXES    => {},
+            $BAG_C_KEYS       => {},
         },
     } );
 }
 
-sub v_Dictionary_as_AV
+sub v_Bag_as_AV
 {
     my ($MDLL, $h) = @_;
-    # Expect $h to be an Dictionary.
-    return [values %{$$h->{$VSA_DICT}->{$DICT_C_ELEMS_BY_R}}];
+    # Expect $h to be an Bag.
+    return [values %{$$h->{$VSA_BAG}->{$BAG_C_ELEMS_BY_R}}];
 }
 
 ###########################################################################
@@ -700,9 +686,51 @@ sub _same
             $result_p = ($$h_lhs->{$VSA_SCALAR} eq $$h_rhs->{$VSA_SCALAR});
             last S_KIND;
         }
-        if ($k eq $S_KIND_DICT)
+        if ($k eq $S_KIND_BAG)
         {
-            $result_p = ($MDLL->_which( $h_lhs ) eq $MDLL->_which( $h_rhs ));
+            # Note that for now we are ignoring any possible optimizations
+            # that may come from the presence of 'keys'/'indexes'.
+            # In order to know if 2 Bag are the same we must first ensure
+            # that any duplicate UV in elems_by_r are merged, and we do
+            # that most simply by ensuring elems_by_v is populated,
+            # which as a side-effect will deduplicate elems_by_r also.
+            my $lhs_bag = $$h_lhs->{$VSA_BAG};
+            my $rhs_bag = $$h_rhs->{$VSA_BAG};
+            if (!exists $lhs_bag->{$BAG_C_ELEMS_BY_V})
+            {
+                $MDLL->_want_bag_elems_by_v( $lhs_bag );
+            }
+            if (!exists $rhs_bag->{$BAG_C_ELEMS_BY_V})
+            {
+                $MDLL->_want_bag_elems_by_v( $rhs_bag );
+            }
+            my $lhs_ebv = $lhs_bag->{$BAG_C_ELEMS_BY_V};
+            my $rhs_ebv = $rhs_bag->{$BAG_C_ELEMS_BY_V};
+            if ((scalar values %{$lhs_ebv}) != (scalar values %{$rhs_ebv}))
+            {
+                # Bags have different numbers of quantified values.
+                $result_p = 0;
+                last S_KIND;
+            }
+            for my $uvw (keys %{$lhs_ebv})
+            {
+                if (!exists $rhs_ebv->{$uvw})
+                {
+                    # Unique value doesn't exist in both bags.
+                    $result_p = 0;
+                    last S_KIND;
+                }
+                if ($lhs_ebv->{$uvw}->[1] ne $rhs_ebv->{$uvw}->[1])
+                {
+                    # Quantities of corresponding unique values not same.
+                    $result_p = 0;
+                    last S_KIND;
+                }
+                # TODO: Even if the 2 Bag as a whole don't end up being
+                # considered the same, merge the structures of matching
+                # elements we come across to save memory.
+            }
+            $result_p = 1;
             last S_KIND;
         }
         if ($k eq $S_KIND_TUPLE)
@@ -801,6 +829,11 @@ sub _same_tuple
     return 1;
 }
 
+sub _want_bag_elems_by_v
+{
+    confess qq{not implemented};
+}
+
 ###########################################################################
 
 sub _which
@@ -835,7 +868,7 @@ sub _which
             $which = '\\+['.(join q{,}, @{$MDLL->v_String_as_AV($h)}).']';
             last S_KIND;
         }
-        if ($k eq $S_KIND_DICT)
+        if ($k eq $S_KIND_BAG)
         {
             confess qq{$k not implemented};
         }
@@ -875,11 +908,11 @@ sub _which
             {
                 confess qq{$k subtype not implemented};
             }
-            if ($subtype eq $MD_pkg_name.'.Bag')
+            if ($subtype eq $MD_pkg_name.'.Relation')
             {
                 confess qq{$k subtype not implemented};
             }
-            if ($subtype eq $MD_pkg_name.'.Relation')
+            if ($subtype eq $MD_pkg_name.'.Dictionary')
             {
                 confess qq{$k subtype not implemented};
             }
