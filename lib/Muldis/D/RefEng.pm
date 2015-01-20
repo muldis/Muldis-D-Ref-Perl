@@ -40,6 +40,20 @@ I<This documentation is pending.>
 
 =head1 DESCRIPTION
 
+Muldis::D::RefEng is the reference implementation of the Muldis D language,
+authority B<http://muldis.com>, version number B<0.200.0>.  While other
+Muldis D implementations also may exist, this one over Perl 5 is the
+canonical one.
+
+The separate all-documentation distribution L<Muldis::D> also exists; it
+was intended to be the formal definition of the Muldis D language, but it
+is currently years out of date; until it catches up, Muldis::D::RefEng also
+serves double-duty as the formal language definition.
+
+The Muldis D language itself has as a primary influence the work of Chris
+Date (C.J. Date) and Hugh Darwen whose home website is
+L<http://www.thethirdmanifesto.com/>.
+
 I<This documentation is pending.>
 
 =head1 INTERFACE
@@ -63,15 +77,6 @@ This file requires any version of Perl 5.x.y that is at least 5.8.1.
 None reported.
 
 =head1 SEE ALSO
-
-The separate all-documentation distribution L<Muldis::D> is the formal
-definition of the Muldis D language, which Muldis::D::RefEng is an
-implementation of.  The Muldis D language in turn has as a primary
-influence the work of Chris Date (C.J. Date) and Hugh Darwen whose home
-website is L<http://www.thethirdmanifesto.com/>.  I<Actually, that other
-distribution is several years out of date, so many portions of it are
-obsolete; for now Muldis::D::RefEng should be considered canonical in any
-areas where the 2 disagree.>
 
 These Perl 5 packages that are in the current distribution:
 L<Muldis::D::RefEng::Low_Level>.

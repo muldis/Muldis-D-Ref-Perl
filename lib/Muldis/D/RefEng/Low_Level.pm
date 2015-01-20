@@ -48,8 +48,8 @@ use Math::BigInt try => 'GMP';
     sub _refcount { return B::svref_2object( $_[0] )->REFCNT; };
 
     # CONSTANTS:
-    my $MDLL_pkg_name = q{::Muldis_D::Low_Level:"http://muldis.com":"0"};
-    my $MD_pkg_name   = q{::Muldis_D:"http://muldis.com":"0"};
+    my $MDLL_pkg_name = q{::Muldis_D::Low_Level:"http://muldis.com":"0.200.0"};
+    my $MD_pkg_name   = q{::Muldis_D:"http://muldis.com":"0.200.0"};
 
     # NAMING CONVENTIONS:
         # $MDLL : singleton obj repr Muldis_D::Low_Level package
