@@ -1,10 +1,13 @@
-Muldis::D::RefEng -
-Reference Implementation of Muldis D Over Perl 5
+                             Muldis::D::RefEng
+                                  README
+---------------------------------------------------------------------------
 
-AUTHOR
+by Darren Duncan <darren@DarrenDuncan.net>
 
-Darren Duncan - darren@DarrenDuncan.net
+This distribution features the Perl 5 module named Muldis::D::RefEng
+(Reference Implementation of Muldis D Over Perl 5) and its support
+structure.
 
-LICENSE AND COPYRIGHT
+TODO: Flesh this out.
 
-Copyright © 2011-2013, Muldis Data Systems, Inc.
+Copyright © 2011-2015, Muldis Data Systems, Inc.

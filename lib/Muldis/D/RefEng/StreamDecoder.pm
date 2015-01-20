@@ -342,6 +342,8 @@ Darren Duncan - darren@DarrenDuncan.net
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright © 2011-2013, Muldis Data Systems, Inc.
+Copyright © 2011-2015, Muldis Data Systems, Inc.
+
+See the LICENSE AND COPYRIGHT of L<Muldis::D::RefEng> for details.
 
 =cut
