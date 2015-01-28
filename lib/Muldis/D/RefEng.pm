@@ -41,10 +41,11 @@ I<This documentation is pending.>
 =head1 DESCRIPTION
 
 Muldis::D::RefEng is the reference implementation of the Muldis D language,
-authority B<http://muldis.com>, version number B<0.200.0>.  While other
+authority B<http://muldis.com>, version number B<0.200>.  While other
 Muldis D implementations also may exist, this one over Perl 5 is the
 canonical one.
 
+TODO: Rewrite this paragraph.
 The separate all-documentation distribution L<Muldis::D> also exists; it
 was intended to be the formal definition of the Muldis D language, but it
 is currently years out of date; until it catches up, Muldis::D::RefEng also

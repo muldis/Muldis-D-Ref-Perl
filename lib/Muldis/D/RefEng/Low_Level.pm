@@ -6,6 +6,9 @@ use warnings FATAL => 'all';
 use B;
 use Math::BigInt try => 'GMP';
 
+# Note that many Math::BigInt methods mutate their invocants, so for those
+# we either need to say $x->copy()->foo(...) or Math::BigInt->foo($x,...).
+
 ###########################################################################
 ###########################################################################
 
@@ -48,8 +51,10 @@ use Math::BigInt try => 'GMP';
     sub _refcount { return B::svref_2object( $_[0] )->REFCNT; };
 
     # CONSTANTS:
-    my $MDLL_pkg_name = q{::Muldis_D::Low_Level:"http://muldis.com":"0.200.0"};
-    my $MD_pkg_name   = q{::Muldis_D:"http://muldis.com":"0.200.0"};
+    my $MDLL_PKG_NAME = q{::Muldis_D::Low_Level:"http://muldis.com":"0.200"};
+    my $MD_PKG_NAME   = q{::Muldis_D:"http://muldis.com":"0.200"};
+
+    my $LARGE_STR_THRESH = 1000;
 
     # NAMING CONVENTIONS:
         # $MDLL : singleton obj repr Muldis_D::Low_Level package
@@ -193,7 +198,7 @@ use Math::BigInt try => 'GMP';
         $VSA_SCALAR => (1==1),
     } );
 
-    # Integer 0 (type default val) and 1 values.
+    # Integer 0 (type default val) and 1 and -1 values.
     my $zero = $_cache->{$S_KIND_INT}->{0} = _new_v( {
         $VSA_S_KIND => $S_KIND_INT,
         $VSA_WHICH  => '0',
@@ -203,6 +208,11 @@ use Math::BigInt try => 'GMP';
         $VSA_S_KIND => $S_KIND_INT,
         $VSA_WHICH  => '1',
         $VSA_SCALAR => 1,
+    } );
+    my $neg_one = $_cache->{$S_KIND_INT}->{'-1'} = _new_v( {
+        $VSA_S_KIND => $S_KIND_INT,
+        $VSA_WHICH  => '-1',
+        $VSA_SCALAR => -1,
     } );
 
     # Array with no elements (type default val).
@@ -316,6 +326,10 @@ sub v_Integer
         {
             return $one;
         }
+        if ($p->is_one('-'))
+        {
+            return $neg_one;
+        }
         my $h = _new_v( {
             $VSA_S_KIND => $S_KIND_INT,
             $VSA_BIGINT => $p,
@@ -385,7 +399,8 @@ sub v_String
             map { chr(ref $_ ? $MDLL->v_Integer_as_SV($_) : $_) } @$p;
     }
     # Expect $p to be a defined Perl native string, of octets or chars.
-    if (exists $_cache->{$S_KIND_STR}->{$p})
+    if ((length $p) <= $LARGE_STR_THRESH
+        and exists $_cache->{$S_KIND_STR}->{$p})
     {
         return $_cache->{$S_KIND_STR}->{$p};
     }
@@ -393,7 +408,7 @@ sub v_String
         $VSA_S_KIND => $S_KIND_STR,
         $VSA_SCALAR => $p,
     } );
-    if ($want_cached)
+    if ($want_cached and (length $p) <= $LARGE_STR_THRESH)
     {
         $_cache->{$S_KIND_STR}->{$p} = $h;
     }
@@ -879,11 +894,11 @@ sub _which
         if ($k eq $S_KIND_CPSL)
         {
             my $subtype = $$h->{$VSA_IDENT}->[4];
-            if ($subtype eq $MD_pkg_name.'.Blob')
+            if ($subtype eq $MD_PKG_NAME.'.Blob')
             {
                 confess qq{$k subtype not implemented};
             }
-            if ($subtype eq $MD_pkg_name.'.Text')
+            if ($subtype eq $MD_PKG_NAME.'.Text')
             {
                 my $h_maximal_chars = $$h->{$VSA_TUPLE}->{maximal_chars};
                 $which = $$h_maximal_chars->{$VSA_SCALAR};
@@ -892,35 +907,35 @@ sub _which
                 $which = qq{'$which'};
                 last S_KIND;
             }
-            if ($subtype eq $MD_pkg_name.'.Ratio')
+            if ($subtype eq $MD_PKG_NAME.'.Ratio')
             {
                 confess qq{$k subtype not implemented};
             }
-            if ($subtype eq $MD_pkg_name.'.Float')
+            if ($subtype eq $MD_PKG_NAME.'.Float')
             {
                 confess qq{$k subtype not implemented};
             }
-            if ($subtype eq $MD_pkg_name.'.Interval')
+            if ($subtype eq $MD_PKG_NAME.'.Interval')
             {
                 confess qq{$k subtype not implemented};
             }
-            if ($subtype eq $MD_pkg_name.'.Set')
+            if ($subtype eq $MD_PKG_NAME.'.Set')
             {
                 confess qq{$k subtype not implemented};
             }
-            if ($subtype eq $MD_pkg_name.'.Relation')
+            if ($subtype eq $MD_PKG_NAME.'.Relation')
             {
                 confess qq{$k subtype not implemented};
             }
-            if ($subtype eq $MD_pkg_name.'.Dictionary')
+            if ($subtype eq $MD_PKG_NAME.'.Dictionary')
             {
                 confess qq{$k subtype not implemented};
             }
-            if ($subtype eq $MD_pkg_name.'.SC_Heading')
+            if ($subtype eq $MD_PKG_NAME.'.SC_Heading')
             {
                 confess qq{$k subtype not implemented};
             }
-            if ($subtype eq $MD_pkg_name.'.SC_Renaming')
+            if ($subtype eq $MD_PKG_NAME.'.SC_Renaming')
             {
                 confess qq{$k subtype not implemented};
             }
@@ -1009,6 +1024,92 @@ sub Integer__is_one # function
     return (refaddr $h == refaddr $one) ? $true : $false;
 }
 
+sub Integer__neg_one # function
+{
+    return $neg_one;
+}
+
+sub Integer__is_neg_one # function
+{
+    my ($MDLL, $h) = @_;
+    return (refaddr $h == refaddr $neg_one) ? $true : $false;
+}
+
+sub Integer__is_neg # function
+{
+    my ($MDLL, $h) = @_;
+    if (exists $$h->{$VSA_BIGINT})
+    {
+        return $$h->{$VSA_BIGINT}->is_neg() ? $true : $false;
+    }
+    return ($$h->{$VSA_SCALAR} < 0) ? $true : $false;
+}
+
+sub Integer__pred # function
+{
+    my ($MDLL, $h) = @_;
+    if (exists $$h->{$VSA_BIGINT})
+    {
+        return $MDLL->v_Integer( $$h->{$VSA_BIGINT}->copy()->bdec() );
+    }
+    my $res = $$h->{$VSA_SCALAR} - 1;
+    # We actually want to use a devel tool to see if the IV is canonical rather than an FV.
+    if (int $res ne $res)
+    {
+        # Result too big for an IV so we lost precision and got an FV.
+        $res = Math::BigInt->new( $$h->{$VSA_SCALAR} )->bdec();
+    }
+    return $MDLL->v_Integer( $res );
+}
+
+sub Integer__succ # function
+{
+    my ($MDLL, $h) = @_;
+    if (exists $$h->{$VSA_BIGINT})
+    {
+        return $MDLL->v_Integer( $$h->{$VSA_BIGINT}->copy()->binc() );
+    }
+    my $res = $$h->{$VSA_SCALAR} + 1;
+    # We actually want to use a devel tool to see if the IV is canonical rather than an FV.
+    if (int $res ne $res)
+    {
+        # Result too big for an IV so we lost precision and got an FV.
+        $res = Math::BigInt->new( $$h->{$VSA_SCALAR} )->binc();
+    }
+    return $MDLL->v_Integer( $res );
+}
+
+sub Integer__opposite # function
+{
+    my ($MDLL, $h) = @_;
+    if (refaddr $h == refaddr $zero)
+    {
+        return $h;
+    }
+    if (exists $$h->{$VSA_BIGINT})
+    {
+        return $MDLL->v_Integer( $$h->{$VSA_BIGINT}->copy()->bneg() );
+    }
+    # Process in string form having full precision; remove or add the '-'.
+    return $MDLL->v_Integer( substr($$h->{$VSA_SCALAR},0,1) eq '-'
+        ? substr($$h->{$VSA_SCALAR},1) : '-'.$$h->{$VSA_SCALAR} );
+}
+
+sub Integer__abs # function
+{
+    my ($MDLL, $h) = @_;
+    if (!$MDLL->Integer__is_neg( $h ))
+    {
+        return $h;
+    }
+    if (exists $$h->{$VSA_BIGINT})
+    {
+        return $MDLL->v_Integer( $$h->{$VSA_BIGINT}->copy()->babs() );
+    }
+    # Process in string form having full precision; remove the '-'.
+    return $MDLL->v_Integer( substr($$h->{$VSA_SCALAR},1) );
+}
+
 sub Integer__plus # function
 {
     my ($MDLL, $h_augend, $h_addend) = @_;
@@ -1020,16 +1121,37 @@ sub Integer__plus # function
     {
         return $h_augend;
     }
-    if (exists $$h_augend->{$VSA_BIGINT}
-        or exists $$h_addend->{$VSA_BIGINT})
+    if (refaddr $h_augend == refaddr $one)
     {
-        # At least one input is a Math::BigInt object.
-        return $MDLL->v_Integer( Math::BigInt->badd(
-            exists $$h_augend->{$VSA_BIGINT} ? $$h_augend->{$VSA_BIGINT}
-                : $$h_augend->{$VSA_SCALAR},
-            exists $$h_addend->{$VSA_BIGINT} ? $$h_addend->{$VSA_BIGINT}
-                : $$h_addend->{$VSA_SCALAR},
-        ) );
+        return $MDLL->Integer__succ( $h_addend );
+    }
+    if (refaddr $h_addend == refaddr $one)
+    {
+        return $MDLL->Integer__succ( $h_augend );
+    }
+    if (refaddr $h_augend == refaddr $neg_one)
+    {
+        return $MDLL->Integer__pred( $h_addend );
+    }
+    if (refaddr $h_addend == refaddr $neg_one)
+    {
+        return $MDLL->Integer__pred( $h_augend );
+    }
+    if (exists $$h_augend->{$VSA_BIGINT})
+    {
+        # At least the first input is a Math::BigInt object.
+        return $MDLL->v_Integer(
+            $$h_augend->{$VSA_BIGINT}->copy()->badd(
+                exists $$h_addend->{$VSA_BIGINT}
+                ? $$h_addend->{$VSA_BIGINT}
+                : $$h_addend->{$VSA_SCALAR} ) );
+    }
+    if (exists $$h_addend->{$VSA_BIGINT})
+    {
+        # Just the second input is a Math::BigInt object.
+        return $MDLL->v_Integer(
+            $$h_addend->{$VSA_BIGINT}->copy()->badd(
+                $$h_augend->{$VSA_SCALAR} ) );
     }
     # Both inputs are native Perl integers.
     my $sum = $$h_augend->{$VSA_SCALAR} + $$h_addend->{$VSA_SCALAR};
@@ -1042,6 +1164,130 @@ sub Integer__plus # function
         );
     }
     return $MDLL->v_Integer( $sum );
+}
+
+sub Integer__minus # function
+{
+    my ($MDLL, $h_minuend, $h_subtrahend) = @_;
+    return $MDLL->Integer__plus( $h_minuend,
+        $MDLL->Integer__opposite( $h_subtrahend ) );
+}
+
+sub Integer__abs_minus # function
+{
+    my ($MDLL, $h_minuend, $h_subtrahend) = @_;
+    return $MDLL->Integer__abs( $MDLL->Integer__plus( $h_minuend,
+        $MDLL->Integer__opposite( $h_subtrahend ) ) );
+}
+
+sub Integer__times # function
+{
+    my ($MDLL, $h_multiplicand, $h_multiplier) = @_;
+    if (refaddr $h_multiplicand == refaddr $one)
+    {
+        return $h_multiplier;
+    }
+    if (refaddr $h_multiplier == refaddr $one)
+    {
+        return $h_multiplicand;
+    }
+    if (refaddr $h_multiplicand == refaddr $zero
+        or refaddr $h_multiplier == refaddr $zero)
+    {
+        return $zero;
+    }
+    if (refaddr $h_multiplicand == refaddr $neg_one)
+    {
+        return $MDLL->Integer__opposite( $h_multiplier );
+    }
+    if (refaddr $h_multiplier == refaddr $neg_one)
+    {
+        return $MDLL->Integer__opposite( $h_multiplicand );
+    }
+    if (exists $$h_multiplicand->{$VSA_BIGINT})
+    {
+        # At least the first input is a Math::BigInt object.
+        return $MDLL->v_Integer(
+            $$h_multiplicand->{$VSA_BIGINT}->copy()->bmul(
+                exists $$h_multiplier->{$VSA_BIGINT}
+                ? $$h_multiplier->{$VSA_BIGINT}
+                : $$h_multiplier->{$VSA_SCALAR} ) );
+    }
+    if (exists $$h_multiplier->{$VSA_BIGINT})
+    {
+        # Just the second input is a Math::BigInt object.
+        return $MDLL->v_Integer(
+            $$h_multiplier->{$VSA_BIGINT}->copy()->bmul(
+                $$h_multiplicand->{$VSA_SCALAR} ) );
+    }
+    # Both inputs are native Perl integers.
+    my $prod = $$h_multiplicand->{$VSA_SCALAR} + $$h_multiplier->{$VSA_SCALAR};
+    # We actually want to use a devel tool to see if the IV is canonical rather than an FV.
+    if (int $prod ne $prod)
+    {
+        # Result too big for an IV so we lost precision and got an FV.
+        $prod = Math::BigInt->bmul( $$h_multiplicand->{$VSA_SCALAR},
+            $$h_multiplier->{$VSA_SCALAR}
+        );
+    }
+    return $MDLL->v_Integer( $prod );
+}
+
+sub Integer__whole_divide_rtz # function
+{
+    my ($MDLL, $h_dividend, $h_divisor) = @_;
+    return $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor )->[0];
+}
+
+sub Integer__modulo_rtz # function
+{
+    my ($MDLL, $h_dividend, $h_divisor) = @_;
+    return $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor )->[1];
+}
+
+sub Integer__divide_and_modulo_rtz # function
+{
+    my ($MDLL, $h_dividend, $h_divisor) = @_;
+    return $MDLL->v_Array(
+        $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor ) );
+}
+
+sub _divide_and_modulo_rtz # function
+{
+    my ($MDLL, $h_dividend, $h_divisor) = @_;
+    if (refaddr $h_divisor == refaddr $zero)
+    {
+        confess q{illegal divisor of zero};
+    }
+    if (refaddr $h_dividend == refaddr $zero)
+    {
+        return $zero;
+    }
+    if (refaddr $h_divisor == refaddr $one)
+    {
+        return $h_dividend;
+    }
+    if ($MDLL->_same( $h_dividend, $h_divisor ))
+    {
+        return $one;
+    }
+    if (refaddr $h_divisor == refaddr $neg_one)
+    {
+        return $MDLL->Integer__opposite( $h_dividend );
+    }
+    confess q{unimplemented};
+}
+
+sub Integer__power # function
+{
+    my ($MDLL, $h_radix, $h_exponent) = @_;
+    confess q{unimplemented};
+}
+
+sub Integer__factorial # function
+{
+    my ($MDLL, $h) = @_;
+    confess q{unimplemented};
 }
 
 ###########################################################################

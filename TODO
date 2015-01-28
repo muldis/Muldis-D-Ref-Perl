@@ -4,4 +4,26 @@
 
 Following is a summary of things that still need doing.
 
+* Never execute Muldis D stimulus response rules when compiling it unless
+the user explicitly passed a flag saying it was ok, for security, they may
+think it was just data by default.
+
+* Only ship cross-compiled versions of standard Muldis D libraries with
+Muldis::D::RefEng, eg as a set of files with names like
+lib/Muldis/D/RefEng/Compiled/Muldis_D/http_muldis_com__0_120_0/Stringy.pm
+for simplicity and performance.  The Muldis::D::RefEng::Compiled::*
+namespace is where all user-written Muldis D code is compiled to anyway for
+normal use.  Users can see Muldis-D-Standard distro for system lib sources.
+
+* Write REPL in Muldis D itself, only ship first RE 0.x version when it
+supports that.
+
+* Figure out some way to be non-blocking / asynchronous / service-like
+in the API, particularly between what are considered separate Muldis D VM
+"processes" already, where one being busy doesn't block others.  See POE.
+
+* In Low_Level, consider storing strings opt as arrays of Perl strings, for
+performance/memory in the face of blobs, so catenation is lazier.
+Inspiration to a point by Postgres' TOAST feature.
+
 * Whatever else needs doing, such as, fixing bugs.
