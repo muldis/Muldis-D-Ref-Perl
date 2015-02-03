@@ -92,7 +92,7 @@ use Math::BigInt try => 'GMP';
                 my $IDENT_ST_RELATIVE = 'relative';
                 my $IDENT_ST_FLOATING = 'floating';
         my $VSA_WHICH = 'which';  # serializes payload if exists
-            # Serialization takes the form of a Muldis D PT_STD value
+            # Serialization takes the form of a Muldis D Plain_Text value
             # literal for the value in question, in a canonical format so
             # two ::Value with the same 'which' are guaranteed to be the
             # same value as far as Muldis D is concerned.
@@ -101,7 +101,9 @@ use Math::BigInt try => 'GMP';
             # Moreover, it will use special syntax for a variety of special
             # cases that are subtypes of Capsule, for example
             # {Blob,Text,Ratio,Float,Interval,Set,Relation,Dictionary} and
-            # {SC_Heading,SC_Renaming} etc have their own PT_STD syntax.
+            # {Quantity,SC_Heading,SC_Renaming} and
+            # {SC_Func_Args,SC_Func_Params,SC_Proc_Args,SC_Proc_Params}
+            # etc have their own Plain_Text syntax.
         my $VSA_SCALAR = 'scalar';  # Perl defined nonref scalar if exists
             # Further restriction/detail based on struct kind:
                 # Boolean - Perl native boolean; (1==0) or (1==1)
@@ -506,7 +508,7 @@ sub v_Capsule_attrs_as_HV
 
 ###########################################################################
 
-sub v_Identifer
+sub v_SC_Identifier
 {
     my ($MDLL, $p) = @_;
     # Expect $p to be a Perl arrayref of 4 elements.
@@ -527,7 +529,8 @@ sub v_Identifer
     # - The relative val of 4x- means "self", is SC_Identifier default val.
     # - The identity subtype is the full declared name of the package
     #       actually linked in, not what was requested by users.
-    # - A Capsule specifically requires "identity" SC_Identifiers for "type".
+    # - A Capsule specifically requires "identity" SC_Identifiers for "type",
+    #       and proper subtype Reference has all such "identity" values.
 
     confess q{illegal SC_Identifier}
         if $rel_starts_n_lev_up < 0;
@@ -604,10 +607,10 @@ sub _normalize_name_str
     return $str;
 }
 
-sub v_Identifer_as_AV
+sub v_SC_Identifier_as_AV
 {
     my ($MDLL, $h) = @_;
-    # Expect $h to be an Identifer.
+    # Expect $h to be an SC_Identifier.
     return [@{$$h->{$VSA_IDENT}}[0..3]];
 }
 
@@ -931,11 +934,31 @@ sub _which
             {
                 confess qq{$k subtype not implemented};
             }
+            if ($subtype eq $MD_PKG_NAME.'.Quantity')
+            {
+                confess qq{$k subtype not implemented};
+            }
             if ($subtype eq $MD_PKG_NAME.'.SC_Heading')
             {
                 confess qq{$k subtype not implemented};
             }
             if ($subtype eq $MD_PKG_NAME.'.SC_Renaming')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            if ($subtype eq $MD_PKG_NAME.'.SC_Func_Args')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            if ($subtype eq $MD_PKG_NAME.'.SC_Func_Params')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            if ($subtype eq $MD_PKG_NAME.'.SC_Proc_Args')
+            {
+                confess qq{$k subtype not implemented};
+            }
+            if ($subtype eq $MD_PKG_NAME.'.SC_Proc_Params')
             {
                 confess qq{$k subtype not implemented};
             }
