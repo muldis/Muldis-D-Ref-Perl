@@ -100,8 +100,8 @@ use Math::BigInt try => 'GMP';
             # $s[scalar] and $s[ident][4] for the requisite types.
             # Moreover, it will use special syntax for a variety of special
             # cases that are subtypes of Capsule, for example
-            # {Blob,Text,Ratio,Float,Interval,Set,Relation,Dictionary} and
-            # {Quantity,SC_Heading,SC_Renaming} and
+            # {Blob,Text,Ratio,Float,Quantity,Interval,Set,Relation} and
+            # {Dictionary,SC_Heading,SC_Renaming} and
             # {SC_Func_Args,SC_Func_Params,SC_Proc_Args,SC_Proc_Params}
             # etc have their own Plain_Text syntax.
         my $VSA_SCALAR = 'scalar';  # Perl defined nonref scalar if exists
@@ -488,7 +488,7 @@ sub v_Capsule
 {
     my ($MDLL, $p_type, $p_attrs) = @_;
     # Expect $p_type to be a Perl arrayref and $p_attrs a Perl hashref.
-    return $MDLL->Capsule__select_Capsule(
+    return $MDLL->_select_Capsule(
         $MDLL->v_SC_Identifier( $p_type ), $MDLL->v_Tuple( $p_attrs ) );
 }
 
@@ -641,7 +641,8 @@ sub v_External_as_Perl
 
 sub Universal__same # function
 {
-    my ($MDLL, $h_lhs, $h_rhs) = @_;
+    my ($MDLL, $h_topic) = @_;
+    my ($h_lhs, $h_rhs) = @{$$h_topic->{$VSA_ARRAY}};
     return $MDLL->_same( $h_lhs, $h_rhs ) ? $true : $false;
 }
 
@@ -918,6 +919,10 @@ sub _which
             {
                 confess qq{$k subtype not implemented};
             }
+            if ($subtype eq $MD_PKG_NAME.'.Quantity')
+            {
+                confess qq{$k subtype not implemented};
+            }
             if ($subtype eq $MD_PKG_NAME.'.Interval')
             {
                 confess qq{$k subtype not implemented};
@@ -931,10 +936,6 @@ sub _which
                 confess qq{$k subtype not implemented};
             }
             if ($subtype eq $MD_PKG_NAME.'.Dictionary')
-            {
-                confess qq{$k subtype not implemented};
-            }
-            if ($subtype eq $MD_PKG_NAME.'.Quantity')
             {
                 confess qq{$k subtype not implemented};
             }
@@ -981,6 +982,7 @@ sub _which
 
 sub Universal__assign # updater
 {
+    # TODO: Make target+value a single parameter somehow maybe.
     my ($MDLL, $var_target, $h_value) = @_;
     $$var_target = $h_value;
     return;
@@ -988,152 +990,163 @@ sub Universal__assign # updater
 
 ###########################################################################
 
-sub Boolean__false # function
+sub Boolean__false # constant
 {
     return $false;
 }
 
-sub Boolean__true # function
+sub Boolean__true # constant
 {
     return $true;
 }
 
 sub Boolean__not # function
 {
-    my ($MDLL, $h) = @_;
-    return (refaddr $h == refaddr $true) ? $true : $false;
+    my ($MDLL, $h_topic) = @_;
+    return (refaddr $h_topic == refaddr $true) ? $true : $false;
 }
 
 sub Boolean__and # function
 {
-    my ($MDLL, $h_lhs, $h_rhs) = @_;
+    my ($MDLL, $h_topic) = @_;
+    my ($h_lhs, $h_rhs) = @{$$h_topic->{$VSA_ARRAY}};
     return (refaddr $h_lhs == refaddr $true) ? $h_rhs : $false;
 }
 
 sub Boolean__or # function
 {
-    my ($MDLL, $h_lhs, $h_rhs) = @_;
+    my ($MDLL, $h_topic) = @_;
+    my ($h_lhs, $h_rhs) = @{$$h_topic->{$VSA_ARRAY}};
     return (refaddr $h_lhs == refaddr $true) ? $true : $h_rhs;
 }
 
 sub Boolean__xor # function
 {
-    my ($MDLL, $h_lhs, $h_rhs) = @_;
+    my ($MDLL, $h_topic) = @_;
+    my ($h_lhs, $h_rhs) = @{$$h_topic->{$VSA_ARRAY}};
     return (refaddr $h_lhs == refaddr $true)
         ? $MDLL->Boolean__not($h_rhs) : $h_rhs;
 }
 
 ###########################################################################
 
-sub Integer__zero # function
+sub Integer__zero # constant
 {
     return $zero;
 }
 
 sub Integer__is_zero # function
 {
-    my ($MDLL, $h) = @_;
-    return (refaddr $h == refaddr $zero) ? $true : $false;
+    my ($MDLL, $h_topic) = @_;
+    return (refaddr $h_topic == refaddr $zero) ? $true : $false;
 }
 
-sub Integer__one # function
+sub Integer__one # constant
 {
     return $one;
 }
 
 sub Integer__is_one # function
 {
-    my ($MDLL, $h) = @_;
-    return (refaddr $h == refaddr $one) ? $true : $false;
+    my ($MDLL, $h_topic) = @_;
+    return (refaddr $h_topic == refaddr $one) ? $true : $false;
 }
 
-sub Integer__neg_one # function
+sub Integer__neg_one # constant
 {
     return $neg_one;
 }
 
 sub Integer__is_neg_one # function
 {
-    my ($MDLL, $h) = @_;
-    return (refaddr $h == refaddr $neg_one) ? $true : $false;
+    my ($MDLL, $h_topic) = @_;
+    return (refaddr $h_topic == refaddr $neg_one) ? $true : $false;
 }
 
 sub Integer__is_neg # function
 {
-    my ($MDLL, $h) = @_;
-    if (exists $$h->{$VSA_BIGINT})
+    my ($MDLL, $h_topic) = @_;
+    if (exists $$h_topic->{$VSA_BIGINT})
     {
-        return $$h->{$VSA_BIGINT}->is_neg() ? $true : $false;
+        return $$h_topic->{$VSA_BIGINT}->is_neg() ? $true : $false;
     }
-    return ($$h->{$VSA_SCALAR} < 0) ? $true : $false;
+    return ($$h_topic->{$VSA_SCALAR} < 0) ? $true : $false;
 }
 
 sub Integer__pred # function
 {
-    my ($MDLL, $h) = @_;
-    if (exists $$h->{$VSA_BIGINT})
+    my ($MDLL, $h_topic) = @_;
+    if (exists $$h_topic->{$VSA_BIGINT})
     {
-        return $MDLL->v_Integer( $$h->{$VSA_BIGINT}->copy()->bdec() );
+        return $MDLL->v_Integer( $$h_topic->{$VSA_BIGINT}->copy()->bdec() );
     }
-    my $res = $$h->{$VSA_SCALAR} - 1;
+    my $res = $$h_topic->{$VSA_SCALAR} - 1;
     # We actually want to use a devel tool to see if the IV is canonical rather than an FV.
     if (int $res ne $res)
     {
         # Result too big for an IV so we lost precision and got an FV.
-        $res = Math::BigInt->new( $$h->{$VSA_SCALAR} )->bdec();
+        $res = Math::BigInt->new( $$h_topic->{$VSA_SCALAR} )->bdec();
     }
     return $MDLL->v_Integer( $res );
 }
 
 sub Integer__succ # function
 {
-    my ($MDLL, $h) = @_;
-    if (exists $$h->{$VSA_BIGINT})
+    my ($MDLL, $h_topic) = @_;
+    if (exists $$h_topic->{$VSA_BIGINT})
     {
-        return $MDLL->v_Integer( $$h->{$VSA_BIGINT}->copy()->binc() );
+        return $MDLL->v_Integer( $$h_topic->{$VSA_BIGINT}->copy()->binc() );
     }
-    my $res = $$h->{$VSA_SCALAR} + 1;
+    my $res = $$h_topic->{$VSA_SCALAR} + 1;
     # We actually want to use a devel tool to see if the IV is canonical rather than an FV.
     if (int $res ne $res)
     {
         # Result too big for an IV so we lost precision and got an FV.
-        $res = Math::BigInt->new( $$h->{$VSA_SCALAR} )->binc();
+        $res = Math::BigInt->new( $$h_topic->{$VSA_SCALAR} )->binc();
     }
     return $MDLL->v_Integer( $res );
 }
 
 sub Integer__opposite # function
 {
-    my ($MDLL, $h) = @_;
-    if (refaddr $h == refaddr $zero)
+    my ($MDLL, $h_topic) = @_;
+    if (refaddr $h_topic == refaddr $zero)
     {
-        return $h;
+        return $h_topic;
     }
-    if (exists $$h->{$VSA_BIGINT})
+    if (exists $$h_topic->{$VSA_BIGINT})
     {
-        return $MDLL->v_Integer( $$h->{$VSA_BIGINT}->copy()->bneg() );
+        return $MDLL->v_Integer( $$h_topic->{$VSA_BIGINT}->copy()->bneg() );
     }
     # Process in string form having full precision; remove or add the '-'.
-    return $MDLL->v_Integer( substr($$h->{$VSA_SCALAR},0,1) eq '-'
-        ? substr($$h->{$VSA_SCALAR},1) : '-'.$$h->{$VSA_SCALAR} );
+    return $MDLL->v_Integer( substr($$h_topic->{$VSA_SCALAR},0,1) eq '-'
+        ? substr($$h_topic->{$VSA_SCALAR},1)
+        : '-'.$$h_topic->{$VSA_SCALAR} );
 }
 
 sub Integer__abs # function
 {
-    my ($MDLL, $h) = @_;
-    if (!$MDLL->Integer__is_neg( $h ))
+    my ($MDLL, $h_topic) = @_;
+    if (!$MDLL->Integer__is_neg( $h_topic ))
     {
-        return $h;
+        return $h_topic;
     }
-    if (exists $$h->{$VSA_BIGINT})
+    if (exists $$h_topic->{$VSA_BIGINT})
     {
-        return $MDLL->v_Integer( $$h->{$VSA_BIGINT}->copy()->babs() );
+        return $MDLL->v_Integer( $$h_topic->{$VSA_BIGINT}->copy()->babs() );
     }
     # Process in string form having full precision; remove the '-'.
-    return $MDLL->v_Integer( substr($$h->{$VSA_SCALAR},1) );
+    return $MDLL->v_Integer( substr($$h_topic->{$VSA_SCALAR},1) );
 }
 
 sub Integer__plus # function
+{
+    my ($MDLL, $h_topic) = @_;
+    my ($h_augend, $h_addend) = @{$$h_topic->{$VSA_ARRAY}};
+    return $MDLL->_plus( $h_augend, $h_addend );
+}
+
+sub _plus
 {
     my ($MDLL, $h_augend, $h_addend) = @_;
     if (refaddr $h_augend == refaddr $zero)
@@ -1191,21 +1204,24 @@ sub Integer__plus # function
 
 sub Integer__minus # function
 {
-    my ($MDLL, $h_minuend, $h_subtrahend) = @_;
-    return $MDLL->Integer__plus( $h_minuend,
+    my ($MDLL, $h_topic) = @_;
+    my ($h_minuend, $h_subtrahend) = @{$$h_topic->{$VSA_ARRAY}};
+    return $MDLL->_plus( $h_minuend,
         $MDLL->Integer__opposite( $h_subtrahend ) );
 }
 
 sub Integer__abs_minus # function
 {
-    my ($MDLL, $h_minuend, $h_subtrahend) = @_;
-    return $MDLL->Integer__abs( $MDLL->Integer__plus( $h_minuend,
+    my ($MDLL, $h_topic) = @_;
+    my ($h_minuend, $h_subtrahend) = @{$$h_topic->{$VSA_ARRAY}};
+    return $MDLL->Integer__abs( $MDLL->_plus( $h_minuend,
         $MDLL->Integer__opposite( $h_subtrahend ) ) );
 }
 
 sub Integer__times # function
 {
-    my ($MDLL, $h_multiplicand, $h_multiplier) = @_;
+    my ($MDLL, $h_topic) = @_;
+    my ($h_multiplicand, $h_multiplier) = @{$$h_topic->{$VSA_ARRAY}};
     if (refaddr $h_multiplicand == refaddr $one)
     {
         return $h_multiplier;
@@ -1258,19 +1274,22 @@ sub Integer__times # function
 
 sub Integer__whole_divide_rtz # function
 {
-    my ($MDLL, $h_dividend, $h_divisor) = @_;
+    my ($MDLL, $h_topic) = @_;
+    my ($h_dividend, $h_divisor) = @{$$h_topic->{$VSA_ARRAY}};
     return $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor )->[0];
 }
 
 sub Integer__modulo_rtz # function
 {
-    my ($MDLL, $h_dividend, $h_divisor) = @_;
+    my ($MDLL, $h_topic) = @_;
+    my ($h_dividend, $h_divisor) = @{$$h_topic->{$VSA_ARRAY}};
     return $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor )->[1];
 }
 
 sub Integer__divide_and_modulo_rtz # function
 {
-    my ($MDLL, $h_dividend, $h_divisor) = @_;
+    my ($MDLL, $h_topic) = @_;
+    my ($h_dividend, $h_divisor) = @{$$h_topic->{$VSA_ARRAY}};
     return $MDLL->v_Array(
         $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor ) );
 }
@@ -1303,58 +1322,66 @@ sub _divide_and_modulo_rtz # function
 
 sub Integer__power # function
 {
-    my ($MDLL, $h_radix, $h_exponent) = @_;
+    my ($MDLL, $h_topic) = @_;
+    my ($h_radix, $h_exponent) = @{$$h_topic->{$VSA_ARRAY}};
     confess q{unimplemented};
 }
 
 sub Integer__factorial # function
 {
-    my ($MDLL, $h) = @_;
+    my ($MDLL, $h_topic) = @_;
     confess q{unimplemented};
 }
 
 ###########################################################################
 
-sub Array__empty # function
+sub Array__empty # constant
 {
     return $empty_array;
 }
 
 sub Array__is_empty # function
 {
-    my ($MDLL, $h) = @_;
-    return (refaddr $h == refaddr $empty_array) ? $true : $false;
+    my ($MDLL, $h_topic) = @_;
+    return (refaddr $h_topic == refaddr $empty_array) ? $true : $false;
 }
 
 ###########################################################################
 
-sub String__empty # function
+sub String__empty # constant
 {
     return $empty_str;
 }
 
 sub String__is_empty # function
 {
-    my ($MDLL, $h) = @_;
-    return (refaddr $h == refaddr $empty_str) ? $true : $false;
+    my ($MDLL, $h_topic) = @_;
+    return (refaddr $h_topic == refaddr $empty_str) ? $true : $false;
 }
 
 ###########################################################################
 
-sub Tuple__nullary # function
+sub Tuple__nullary # constant
 {
     return $nullary_tuple;
 }
 
 sub Tuple__is_nullary # function
 {
-    my ($MDLL, $h) = @_;
-    return (refaddr $h == refaddr $nullary_tuple) ? $true : $false;
+    my ($MDLL, $h_topic) = @_;
+    return (refaddr $h_topic == refaddr $nullary_tuple) ? $true : $false;
 }
 
 ###########################################################################
 
 sub Capsule__select_Capsule # function
+{
+    my ($MDLL, $h_topic) = @_;
+    my ($h_type, $h_attrs) = @{$$h_topic->{$VSA_ARRAY}};
+    return $MDLL->_select_Capsule( $h_type, $h_attrs );
+}
+
+sub _select_Capsule
 {
     my ($MDLL, $h_type, $h_attrs) = @_;
     # Expect $h_type to be an SC_Identifier and $h_attrs to be a Tuple.
@@ -1369,21 +1396,21 @@ sub Capsule__select_Capsule # function
 
 sub Capsule__Capsule_type # function
 {
-    my ($MDLL, $h) = @_;
+    my ($MDLL, $h_topic) = @_;
     # Expect $h to be a Capsule.
     return _new_v( {
         $VSA_S_KIND => $S_KIND_IDENT,
-        $VSA_IDENT  => $$h->{$VSA_IDENT},
+        $VSA_IDENT  => $$h_topic->{$VSA_IDENT},
     } );
 }
 
 sub Capsule__attrs # function
 {
-    my ($MDLL, $h) = @_;
+    my ($MDLL, $h_topic) = @_;
     # Expect $h to be a Capsule.
     return _new_v( {
         $VSA_S_KIND => $S_KIND_TUPLE,
-        $VSA_TUPLE  => $$h->{$VSA_TUPLE},
+        $VSA_TUPLE  => $$h_topic->{$VSA_TUPLE},
     } );
 }
 
@@ -1391,9 +1418,9 @@ sub Capsule__attrs # function
 
 sub Cast__Tuple__to_SC_Identifier # function
 {
-    my ($MDLL, $h) = @_;
+    my ($MDLL, $h_topic) = @_;
     # Expect $h to be a Tuple of 4 attributes.
-    my $hv = $$h->{$VSA_TUPLE};
+    my $hv = $$h_topic->{$VSA_TUPLE};
     return $MDLL->v_SC_Identifier( [
         [map { $$_->{$VSA_SCALAR} }
             @{${$hv->{pkg_name_base}}->{$VSA_ARRAY}}],
@@ -1407,9 +1434,9 @@ sub Cast__Tuple__to_SC_Identifier # function
 
 sub Cast__SC_Identifier__to_Tuple # function
 {
-    my ($MDLL, $h) = @_;
+    my ($MDLL, $h_topic) = @_;
     # Expect $h to be an SC_Identifier.
-    my $av = $$h->{$VSA_IDENT};
+    my $av = $$h_topic->{$VSA_IDENT};
     return $MDLL->v_Tuple( {
         pkg_name_base
             => $MDLL->v_Array( [map { $MDLL->v_String($_) } @{$av->[0]}] ),
