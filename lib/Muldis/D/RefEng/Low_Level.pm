@@ -982,8 +982,9 @@ sub _which
 
 sub Universal__assign # updater
 {
-    # TODO: Make target+value a single parameter somehow maybe.
-    my ($MDLL, $var_target, $h_value) = @_;
+    my ($MDLL, $var_topic) = @_;
+    # Expect $var_topic is a Perl arrayref.
+    my ($var_target, $h_value) = @{$var_topic};
     $$var_target = $h_value;
     return;
 }
