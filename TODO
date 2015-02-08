@@ -15,6 +15,23 @@ for simplicity and performance.  The Muldis::D::RefEng::Compiled::*
 namespace is where all user-written Muldis D code is compiled to anyway for
 normal use.  Users can see Muldis-D-Standard distro for system lib sources.
 
+* Make parser and compiler as simple as possible such that each one has
+practically zero knowledge of runtime issues such as the routine dispatch
+system.  Each Muldis D package becomes a Perl 5 package, 1:1, and every
+Muldis D routine call is mediated by a runtime routine like
+call_function(ident,args) so the compiled Muldis D code is isolated from
+all that complexity.  Since most MD code goes through Low_Level to eg do
+all the math or array stuff or whatever, there's no Perl equivalent
+translation to worry about.  All binding between compiled packages is done
+strictly at runtime and call_function(ident,args) is the thing savvy to it.
+Actually it is resolve() or something that provides a set of 0..N candidates,
+each a Reference, based just on the names, and call_function() then picks
+one based on the argument data type.  Only 'search' can produce more than
+one result, all others produce exactly one, which fails if it doesn't exist;
+for relative and absolute we can know this at compile time, and search only
+if the current package doesn't use any others, and identity only if pointing
+to the current package.
+
 * Write REPL in Muldis D itself, only ship first RE 0.x version when it
 supports that.
 

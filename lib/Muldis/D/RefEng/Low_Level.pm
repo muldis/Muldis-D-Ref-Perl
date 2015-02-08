@@ -51,13 +51,12 @@ use Math::BigInt try => 'GMP';
     sub _refcount { return B::svref_2object( $_[0] )->REFCNT; };
 
     # CONSTANTS:
-    my $MDLL_PKG_NAME = q{::Muldis_D::Low_Level:"http://muldis.com":"0.200"};
-    my $MD_PKG_NAME   = q{::Muldis_D:"http://muldis.com":"0.200"};
+    my $MD_PKG_NAME = q{::Muldis_D:"http://muldis.com":"0.200"};
 
     my $LARGE_STR_THRESH = 1000;
 
     # NAMING CONVENTIONS:
-        # $MDLL : singleton obj repr Muldis_D::Low_Level package
+        # $MDLL : singleton obj repr RefEng::Low_Level class
         # $h : value handle : a Perl refref blessed into the ::Value class,
             # that refref points to a value struct
         # $s : value struct : a Perl hashref defining the value itself
@@ -641,8 +640,9 @@ sub v_External_as_Perl
 
 sub Universal__same # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_lhs, $h_rhs) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    # Expect $topic is a Perl arrayref.
+    my ($h_lhs, $h_rhs) = @{$topic};
     return $MDLL->_same( $h_lhs, $h_rhs ) ? $true : $false;
 }
 
@@ -1009,22 +1009,22 @@ sub Boolean__not # function
 
 sub Boolean__and # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_lhs, $h_rhs) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    my ($h_lhs, $h_rhs) = @{$topic};
     return (refaddr $h_lhs == refaddr $true) ? $h_rhs : $false;
 }
 
 sub Boolean__or # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_lhs, $h_rhs) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    my ($h_lhs, $h_rhs) = @{$topic};
     return (refaddr $h_lhs == refaddr $true) ? $true : $h_rhs;
 }
 
 sub Boolean__xor # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_lhs, $h_rhs) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    my ($h_lhs, $h_rhs) = @{$topic};
     return (refaddr $h_lhs == refaddr $true)
         ? $MDLL->Boolean__not($h_rhs) : $h_rhs;
 }
@@ -1142,8 +1142,8 @@ sub Integer__abs # function
 
 sub Integer__plus # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_augend, $h_addend) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    my ($h_augend, $h_addend) = @{$topic};
     return $MDLL->_plus( $h_augend, $h_addend );
 }
 
@@ -1205,24 +1205,24 @@ sub _plus
 
 sub Integer__minus # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_minuend, $h_subtrahend) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    my ($h_minuend, $h_subtrahend) = @{$topic};
     return $MDLL->_plus( $h_minuend,
         $MDLL->Integer__opposite( $h_subtrahend ) );
 }
 
 sub Integer__abs_minus # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_minuend, $h_subtrahend) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    my ($h_minuend, $h_subtrahend) = @{$topic};
     return $MDLL->Integer__abs( $MDLL->_plus( $h_minuend,
         $MDLL->Integer__opposite( $h_subtrahend ) ) );
 }
 
 sub Integer__times # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_multiplicand, $h_multiplier) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    my ($h_multiplicand, $h_multiplier) = @{$topic};
     if (refaddr $h_multiplicand == refaddr $one)
     {
         return $h_multiplier;
@@ -1275,22 +1275,22 @@ sub Integer__times # function
 
 sub Integer__whole_divide_rtz # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_dividend, $h_divisor) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    my ($h_dividend, $h_divisor) = @{$topic};
     return $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor )->[0];
 }
 
 sub Integer__modulo_rtz # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_dividend, $h_divisor) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    my ($h_dividend, $h_divisor) = @{$topic};
     return $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor )->[1];
 }
 
 sub Integer__divide_and_modulo_rtz # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_dividend, $h_divisor) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    my ($h_dividend, $h_divisor) = @{$topic};
     return $MDLL->v_Array(
         $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor ) );
 }
@@ -1323,8 +1323,8 @@ sub _divide_and_modulo_rtz # function
 
 sub Integer__power # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_radix, $h_exponent) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    my ($h_radix, $h_exponent) = @{$topic};
     confess q{unimplemented};
 }
 
@@ -1377,8 +1377,8 @@ sub Tuple__is_nullary # function
 
 sub Capsule__select_Capsule # function
 {
-    my ($MDLL, $h_topic) = @_;
-    my ($h_type, $h_attrs) = @{$$h_topic->{$VSA_ARRAY}};
+    my ($MDLL, $topic) = @_;
+    my ($h_type, $h_attrs) = @{$topic};
     return $MDLL->_select_Capsule( $h_type, $h_attrs );
 }
 
@@ -1466,7 +1466,7 @@ __END__
 =head1 NAME
 
 Muldis::D::RefEng::Low_Level -
-Native Perl 5 implementation of Muldis_D::Low_Level package
+Native Perl 5 implementation of Muldis_D low level types and routines
 
 =head1 SYNTAX
 
