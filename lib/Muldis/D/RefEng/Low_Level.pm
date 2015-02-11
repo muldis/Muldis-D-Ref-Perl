@@ -978,92 +978,6 @@ sub _which
     return $$h->{$VSA_WHICH} = $which;
 }
 
-###########################################################################
-
-sub Universal__assign # updater
-{
-    my ($MDLL, $var_topic) = @_;
-    # Expect $var_topic is a Perl arrayref.
-    my ($var_target, $h_value) = @{$var_topic};
-    $$var_target = $h_value;
-    return;
-}
-
-###########################################################################
-
-sub Boolean__false # constant
-{
-    return $false;
-}
-
-sub Boolean__true # constant
-{
-    return $true;
-}
-
-sub Boolean__not # function
-{
-    my ($MDLL, $h_topic) = @_;
-    return (refaddr $h_topic == refaddr $true) ? $true : $false;
-}
-
-sub Boolean__and # function
-{
-    my ($MDLL, $topic) = @_;
-    my ($h_lhs, $h_rhs) = @{$topic};
-    return (refaddr $h_lhs == refaddr $true) ? $h_rhs : $false;
-}
-
-sub Boolean__or # function
-{
-    my ($MDLL, $topic) = @_;
-    my ($h_lhs, $h_rhs) = @{$topic};
-    return (refaddr $h_lhs == refaddr $true) ? $true : $h_rhs;
-}
-
-sub Boolean__xor # function
-{
-    my ($MDLL, $topic) = @_;
-    my ($h_lhs, $h_rhs) = @{$topic};
-    return (refaddr $h_lhs == refaddr $true)
-        ? $MDLL->Boolean__not($h_rhs) : $h_rhs;
-}
-
-###########################################################################
-
-sub Integer__zero # constant
-{
-    return $zero;
-}
-
-sub Integer__is_zero # function
-{
-    my ($MDLL, $h_topic) = @_;
-    return (refaddr $h_topic == refaddr $zero) ? $true : $false;
-}
-
-sub Integer__one # constant
-{
-    return $one;
-}
-
-sub Integer__is_one # function
-{
-    my ($MDLL, $h_topic) = @_;
-    return (refaddr $h_topic == refaddr $one) ? $true : $false;
-}
-
-sub Integer__neg_one # constant
-{
-    return $neg_one;
-}
-
-sub Integer__is_neg_one # function
-{
-    my ($MDLL, $h_topic) = @_;
-    return (refaddr $h_topic == refaddr $neg_one) ? $true : $false;
-}
-
 sub Integer__is_neg # function
 {
     my ($MDLL, $h_topic) = @_;
@@ -1332,45 +1246,6 @@ sub Integer__factorial # function
 {
     my ($MDLL, $h_topic) = @_;
     confess q{unimplemented};
-}
-
-###########################################################################
-
-sub Array__empty # constant
-{
-    return $empty_array;
-}
-
-sub Array__is_empty # function
-{
-    my ($MDLL, $h_topic) = @_;
-    return (refaddr $h_topic == refaddr $empty_array) ? $true : $false;
-}
-
-###########################################################################
-
-sub String__empty # constant
-{
-    return $empty_str;
-}
-
-sub String__is_empty # function
-{
-    my ($MDLL, $h_topic) = @_;
-    return (refaddr $h_topic == refaddr $empty_str) ? $true : $false;
-}
-
-###########################################################################
-
-sub Tuple__nullary # constant
-{
-    return $nullary_tuple;
-}
-
-sub Tuple__is_nullary # function
-{
-    my ($MDLL, $h_topic) = @_;
-    return (refaddr $h_topic == refaddr $nullary_tuple) ? $true : $false;
 }
 
 ###########################################################################
