@@ -495,7 +495,7 @@ sub v_Capsule_type_as_AV
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an Capsule.
-    return $MDLL->v_SC_Identifier_as_AV( $MDLL->Capsule_Capsule_type( $h ) );
+    return $MDLL->v_SC_Identifier_as_AV( $MDLL->Capsule_type( $h ) );
 }
 
 sub v_Capsule_attrs_as_HV
@@ -638,7 +638,63 @@ sub v_External_as_Perl
 
 ###########################################################################
 
-sub Universal_same
+sub isa_Boolean
+{
+    my ($MDLL, $topic) = @_;
+    return $$topic->{$VSA_S_KIND} eq $S_KIND_BOOL ? $true : $false;
+}
+
+sub isa_Integer
+{
+    my ($MDLL, $topic) = @_;
+    return $$topic->{$VSA_S_KIND} eq $S_KIND_INT ? $true : $false;
+}
+
+sub isa_Array
+{
+    my ($MDLL, $topic) = @_;
+    return $$topic->{$VSA_S_KIND} eq $S_KIND_ARRAY ? $true : $false;
+}
+
+sub isa_String
+{
+    my ($MDLL, $topic) = @_;
+    return $$topic->{$VSA_S_KIND} eq $S_KIND_STR ? $true : $false;
+}
+
+sub isa_Bag
+{
+    my ($MDLL, $topic) = @_;
+    return $$topic->{$VSA_S_KIND} eq $S_KIND_BAG ? $true : $false;
+}
+
+sub isa_Tuple
+{
+    my ($MDLL, $topic) = @_;
+    return $$topic->{$VSA_S_KIND} eq $S_KIND_TUPLE ? $true : $false;
+}
+
+sub isa_Capsule
+{
+    my ($MDLL, $topic) = @_;
+    return $$topic->{$VSA_S_KIND} eq $S_KIND_CPSL ? $true : $false;
+}
+
+sub isa_SC_Identifier
+{
+    my ($MDLL, $topic) = @_;
+    return $$topic->{$VSA_S_KIND} eq $S_KIND_IDENT ? $true : $false;
+}
+
+sub isa_External
+{
+    my ($MDLL, $topic) = @_;
+    return $$topic->{$VSA_S_KIND} eq $S_KIND_EXT ? $true : $false;
+}
+
+###########################################################################
+
+sub same
 {
     my ($MDLL, $topic) = @_;
     # Expect $topic is a Perl arrayref.
@@ -978,7 +1034,24 @@ sub _which
     return $$h->{$VSA_WHICH} = $which;
 }
 
-sub Integer_is_neg
+sub same_low_level_type
+{
+    my ($MDLL, $topic) = @_;
+    my ($h_lhs, $h_rhs) = @{$topic};
+    return $$h_lhs->{$VSA_S_KIND} eq $$h_rhs->{$VSA_S_KIND}
+        ? $true : $false;
+}
+
+###########################################################################
+
+sub Integer_in_order
+{
+    my ($MDLL, $topic) = @_;
+    my ($h_lhs, $h_rhs) = @{$topic};
+    confess q{unimplemented};
+}
+
+sub _is_neg
 {
     my ($MDLL, $h_topic) = @_;
     if (exists $$h_topic->{$VSA_BIGINT})
@@ -988,7 +1061,7 @@ sub Integer_is_neg
     return ($$h_topic->{$VSA_SCALAR} < 0) ? $true : $false;
 }
 
-sub Integer_pred
+sub _pred
 {
     my ($MDLL, $h_topic) = @_;
     if (exists $$h_topic->{$VSA_BIGINT})
@@ -1005,7 +1078,7 @@ sub Integer_pred
     return $MDLL->v_Integer( $res );
 }
 
-sub Integer_succ
+sub _succ
 {
     my ($MDLL, $h_topic) = @_;
     if (exists $$h_topic->{$VSA_BIGINT})
@@ -1042,7 +1115,7 @@ sub Integer_opposite
 sub Integer_abs
 {
     my ($MDLL, $h_topic) = @_;
-    if (!$MDLL->Integer_is_neg( $h_topic ))
+    if (!$MDLL->_is_neg( $h_topic ))
     {
         return $h_topic;
     }
@@ -1074,19 +1147,19 @@ sub _plus
     }
     if (refaddr $h_augend == refaddr $one)
     {
-        return $MDLL->Integer_succ( $h_addend );
+        return $MDLL->_succ( $h_addend );
     }
     if (refaddr $h_addend == refaddr $one)
     {
-        return $MDLL->Integer_succ( $h_augend );
+        return $MDLL->_succ( $h_augend );
     }
     if (refaddr $h_augend == refaddr $neg_one)
     {
-        return $MDLL->Integer_pred( $h_addend );
+        return $MDLL->_pred( $h_addend );
     }
     if (refaddr $h_addend == refaddr $neg_one)
     {
-        return $MDLL->Integer_pred( $h_augend );
+        return $MDLL->_pred( $h_augend );
     }
     if (exists $$h_augend->{$VSA_BIGINT})
     {
@@ -1123,14 +1196,6 @@ sub Integer_minus
     my ($h_minuend, $h_subtrahend) = @{$topic};
     return $MDLL->_plus( $h_minuend,
         $MDLL->Integer_opposite( $h_subtrahend ) );
-}
-
-sub Integer_abs_minus
-{
-    my ($MDLL, $topic) = @_;
-    my ($h_minuend, $h_subtrahend) = @{$topic};
-    return $MDLL->Integer_abs( $MDLL->_plus( $h_minuend,
-        $MDLL->Integer_opposite( $h_subtrahend ) ) );
 }
 
 sub Integer_times
@@ -1175,7 +1240,7 @@ sub Integer_times
                 $$h_multiplicand->{$VSA_SCALAR} ) );
     }
     # Both inputs are native Perl integers.
-    my $prod = $$h_multiplicand->{$VSA_SCALAR} + $$h_multiplier->{$VSA_SCALAR};
+    my $prod = $$h_multiplicand->{$VSA_SCALAR} * $$h_multiplier->{$VSA_SCALAR};
     # We actually want to use a devel tool to see if the IV is canonical rather than an FV.
     if (int $prod ne $prod)
     {
@@ -1205,8 +1270,10 @@ sub Integer_divide_and_modulo_rtz
 {
     my ($MDLL, $topic) = @_;
     my ($h_dividend, $h_divisor) = @{$topic};
-    return $MDLL->v_Array(
-        $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor ) );
+    my ($h_quotient, $h_remainder) =
+        @{$MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor )};
+    return $MDLL->v_Tuple( { quotient => $h_quotient,
+        remainder => $h_remainder } );
 }
 
 sub _divide_and_modulo_rtz
@@ -1218,21 +1285,70 @@ sub _divide_and_modulo_rtz
     }
     if (refaddr $h_dividend == refaddr $zero)
     {
-        return $zero;
+        return [$zero, $zero];
     }
     if (refaddr $h_divisor == refaddr $one)
     {
-        return $h_dividend;
+        return [$h_dividend, $zero];
     }
     if ($MDLL->_same( $h_dividend, $h_divisor ))
     {
-        return $one;
+        return [$one, $zero];
     }
     if (refaddr $h_divisor == refaddr $neg_one)
     {
-        return $MDLL->Integer_opposite( $h_dividend );
+        return [$MDLL->Integer_opposite( $h_dividend ), $zero];
     }
-    confess q{unimplemented};
+
+    # While Math::BigInt's bdiv() returns both a quotient and a remainder,
+    # it doesn't seem to have the desired round-to-zero semantics, so we're
+    # going to do things the longer way.
+
+    my $h_pos_rtz_quotient = $MDLL->_posint_divide_rtz(
+        $MDLL->Integer_abs( $h_dividend ),
+        $MDLL->Integer_abs( $h_divisor ) );
+
+    my $h_rtz_quotient = ($MDLL->_is_neg( $h_dividend )
+        xor $MDLL->_is_neg( $h_divisor ))
+        ? $MDLL->Integer_opposite( $h_pos_rtz_quotient )
+        : $h_pos_rtz_quotient;
+
+    # Note that the remainder identity is "dividend - (divisor*quotient)".
+
+    my $h_rtz_remainder = $MDLL->Integer_minus( $h_dividend,
+        $MDLL->Integer_times( $h_divisor, $h_rtz_quotient ) );
+
+    return [$h_rtz_quotient, $h_rtz_remainder];
+}
+
+sub _posint_divide_rtz
+{
+    my ($MDLL, $h_dividend, $h_divisor) = @_;
+    # Expect dividend and divisor are both positive integers.
+    # Note that bdiv returns (quo,rem) pair in list context
+    # but just quotient in scalar context.
+    if (exists $$h_dividend->{$VSA_BIGINT})
+    {
+        # At least the first input is a Math::BigInt object.
+        return $MDLL->v_Integer(
+            scalar $$h_dividend->{$VSA_BIGINT}->copy()->bdiv(
+                exists $$h_divisor->{$VSA_BIGINT}
+                ? $$h_divisor->{$VSA_BIGINT}
+                : $$h_divisor->{$VSA_SCALAR}
+            )
+        );
+    }
+    if (exists $$h_divisor->{$VSA_BIGINT})
+    {
+        # Just the second input is a Math::BigInt object.
+        return $MDLL->v_Integer( scalar Math::BigInt->bdiv(
+            $$h_dividend->{$VSA_SCALAR}, $$h_divisor->{$VSA_BIGINT} ) );
+    }
+    # Both inputs are native Perl integers.
+    # For simplicity we will use Math::BigInt here even if Perl's built-ins
+    # wouldn't have overflowed an IV; we can revisit this decision later.
+    return $MDLL->v_Integer( scalar Math::BigInt->bdiv(
+        $$h_dividend->{$VSA_SCALAR}, $$h_divisor->{$VSA_SCALAR} ) );
 }
 
 sub Integer_power
@@ -1250,7 +1366,7 @@ sub Integer_factorial
 
 ###########################################################################
 
-sub Capsule_select_Capsule
+sub select_Capsule
 {
     my ($MDLL, $topic) = @_;
     my ($h_type, $h_attrs) = @{$topic};
@@ -1270,7 +1386,7 @@ sub _select_Capsule
     } );
 }
 
-sub Capsule_Capsule_type
+sub Capsule_type
 {
     my ($MDLL, $h_topic) = @_;
     # Expect $h to be a Capsule.
