@@ -67,7 +67,7 @@ use Math::BigInt try => 'GMP';
         # select_MDLL() : submethod to obtain $MDLL object
         # v_[A-Z][a-z]+() : new/same ::Value obj def in terms of Perl values
         # v_[A-Z][a-z]+_as_[A-Za-z]+() : extract Perl payload from ::Value
-        # [A-Z][a-z]+__[A-Za-z0-9_]+() : Muldis D rtns, take+return ::Value
+        # [A-Z][a-z]+_[A-Za-z0-9_]+() : Muldis D rtns, take+return ::Value
 
     # Internal identifiers of each value struct attribute if it exists.
         my $VSA_S_KIND = 'k';  # value struct kind, aka $k; determines further attrs
@@ -495,14 +495,14 @@ sub v_Capsule_type_as_AV
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an Capsule.
-    return $MDLL->v_SC_Identifier_as_AV( $MDLL->Capsule__Capsule_type( $h ) );
+    return $MDLL->v_SC_Identifier_as_AV( $MDLL->Capsule_Capsule_type( $h ) );
 }
 
 sub v_Capsule_attrs_as_HV
 {
     my ($MDLL, $h) = @_;
     # Expect $h to be an Capsule.
-    return $MDLL->v_Tuple_as_HV( $MDLL->Capsule__attrs( $h ) );
+    return $MDLL->v_Tuple_as_HV( $MDLL->Capsule_attrs( $h ) );
 }
 
 ###########################################################################
@@ -638,7 +638,7 @@ sub v_External_as_Perl
 
 ###########################################################################
 
-sub Universal__same # function
+sub Universal_same
 {
     my ($MDLL, $topic) = @_;
     # Expect $topic is a Perl arrayref.
@@ -978,7 +978,7 @@ sub _which
     return $$h->{$VSA_WHICH} = $which;
 }
 
-sub Integer__is_neg # function
+sub Integer_is_neg
 {
     my ($MDLL, $h_topic) = @_;
     if (exists $$h_topic->{$VSA_BIGINT})
@@ -988,7 +988,7 @@ sub Integer__is_neg # function
     return ($$h_topic->{$VSA_SCALAR} < 0) ? $true : $false;
 }
 
-sub Integer__pred # function
+sub Integer_pred
 {
     my ($MDLL, $h_topic) = @_;
     if (exists $$h_topic->{$VSA_BIGINT})
@@ -1005,7 +1005,7 @@ sub Integer__pred # function
     return $MDLL->v_Integer( $res );
 }
 
-sub Integer__succ # function
+sub Integer_succ
 {
     my ($MDLL, $h_topic) = @_;
     if (exists $$h_topic->{$VSA_BIGINT})
@@ -1022,7 +1022,7 @@ sub Integer__succ # function
     return $MDLL->v_Integer( $res );
 }
 
-sub Integer__opposite # function
+sub Integer_opposite
 {
     my ($MDLL, $h_topic) = @_;
     if (refaddr $h_topic == refaddr $zero)
@@ -1039,10 +1039,10 @@ sub Integer__opposite # function
         : '-'.$$h_topic->{$VSA_SCALAR} );
 }
 
-sub Integer__abs # function
+sub Integer_abs
 {
     my ($MDLL, $h_topic) = @_;
-    if (!$MDLL->Integer__is_neg( $h_topic ))
+    if (!$MDLL->Integer_is_neg( $h_topic ))
     {
         return $h_topic;
     }
@@ -1054,7 +1054,7 @@ sub Integer__abs # function
     return $MDLL->v_Integer( substr($$h_topic->{$VSA_SCALAR},1) );
 }
 
-sub Integer__plus # function
+sub Integer_plus
 {
     my ($MDLL, $topic) = @_;
     my ($h_augend, $h_addend) = @{$topic};
@@ -1074,19 +1074,19 @@ sub _plus
     }
     if (refaddr $h_augend == refaddr $one)
     {
-        return $MDLL->Integer__succ( $h_addend );
+        return $MDLL->Integer_succ( $h_addend );
     }
     if (refaddr $h_addend == refaddr $one)
     {
-        return $MDLL->Integer__succ( $h_augend );
+        return $MDLL->Integer_succ( $h_augend );
     }
     if (refaddr $h_augend == refaddr $neg_one)
     {
-        return $MDLL->Integer__pred( $h_addend );
+        return $MDLL->Integer_pred( $h_addend );
     }
     if (refaddr $h_addend == refaddr $neg_one)
     {
-        return $MDLL->Integer__pred( $h_augend );
+        return $MDLL->Integer_pred( $h_augend );
     }
     if (exists $$h_augend->{$VSA_BIGINT})
     {
@@ -1117,23 +1117,23 @@ sub _plus
     return $MDLL->v_Integer( $sum );
 }
 
-sub Integer__minus # function
+sub Integer_minus
 {
     my ($MDLL, $topic) = @_;
     my ($h_minuend, $h_subtrahend) = @{$topic};
     return $MDLL->_plus( $h_minuend,
-        $MDLL->Integer__opposite( $h_subtrahend ) );
+        $MDLL->Integer_opposite( $h_subtrahend ) );
 }
 
-sub Integer__abs_minus # function
+sub Integer_abs_minus
 {
     my ($MDLL, $topic) = @_;
     my ($h_minuend, $h_subtrahend) = @{$topic};
-    return $MDLL->Integer__abs( $MDLL->_plus( $h_minuend,
-        $MDLL->Integer__opposite( $h_subtrahend ) ) );
+    return $MDLL->Integer_abs( $MDLL->_plus( $h_minuend,
+        $MDLL->Integer_opposite( $h_subtrahend ) ) );
 }
 
-sub Integer__times # function
+sub Integer_times
 {
     my ($MDLL, $topic) = @_;
     my ($h_multiplicand, $h_multiplier) = @{$topic};
@@ -1152,11 +1152,11 @@ sub Integer__times # function
     }
     if (refaddr $h_multiplicand == refaddr $neg_one)
     {
-        return $MDLL->Integer__opposite( $h_multiplier );
+        return $MDLL->Integer_opposite( $h_multiplier );
     }
     if (refaddr $h_multiplier == refaddr $neg_one)
     {
-        return $MDLL->Integer__opposite( $h_multiplicand );
+        return $MDLL->Integer_opposite( $h_multiplicand );
     }
     if (exists $$h_multiplicand->{$VSA_BIGINT})
     {
@@ -1187,21 +1187,21 @@ sub Integer__times # function
     return $MDLL->v_Integer( $prod );
 }
 
-sub Integer__whole_divide_rtz # function
+sub Integer_whole_divide_rtz
 {
     my ($MDLL, $topic) = @_;
     my ($h_dividend, $h_divisor) = @{$topic};
     return $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor )->[0];
 }
 
-sub Integer__modulo_rtz # function
+sub Integer_modulo_rtz
 {
     my ($MDLL, $topic) = @_;
     my ($h_dividend, $h_divisor) = @{$topic};
     return $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor )->[1];
 }
 
-sub Integer__divide_and_modulo_rtz # function
+sub Integer_divide_and_modulo_rtz
 {
     my ($MDLL, $topic) = @_;
     my ($h_dividend, $h_divisor) = @{$topic};
@@ -1209,7 +1209,7 @@ sub Integer__divide_and_modulo_rtz # function
         $MDLL->_divide_and_modulo_rtz( $h_dividend, $h_divisor ) );
 }
 
-sub _divide_and_modulo_rtz # function
+sub _divide_and_modulo_rtz
 {
     my ($MDLL, $h_dividend, $h_divisor) = @_;
     if (refaddr $h_divisor == refaddr $zero)
@@ -1230,19 +1230,19 @@ sub _divide_and_modulo_rtz # function
     }
     if (refaddr $h_divisor == refaddr $neg_one)
     {
-        return $MDLL->Integer__opposite( $h_dividend );
+        return $MDLL->Integer_opposite( $h_dividend );
     }
     confess q{unimplemented};
 }
 
-sub Integer__power # function
+sub Integer_power
 {
     my ($MDLL, $topic) = @_;
     my ($h_radix, $h_exponent) = @{$topic};
     confess q{unimplemented};
 }
 
-sub Integer__factorial # function
+sub Integer_factorial
 {
     my ($MDLL, $h_topic) = @_;
     confess q{unimplemented};
@@ -1250,7 +1250,7 @@ sub Integer__factorial # function
 
 ###########################################################################
 
-sub Capsule__select_Capsule # function
+sub Capsule_select_Capsule
 {
     my ($MDLL, $topic) = @_;
     my ($h_type, $h_attrs) = @{$topic};
@@ -1270,7 +1270,7 @@ sub _select_Capsule
     } );
 }
 
-sub Capsule__Capsule_type # function
+sub Capsule_Capsule_type
 {
     my ($MDLL, $h_topic) = @_;
     # Expect $h to be a Capsule.
@@ -1280,7 +1280,7 @@ sub Capsule__Capsule_type # function
     } );
 }
 
-sub Capsule__attrs # function
+sub Capsule_attrs
 {
     my ($MDLL, $h_topic) = @_;
     # Expect $h to be a Capsule.
@@ -1292,7 +1292,7 @@ sub Capsule__attrs # function
 
 ###########################################################################
 
-sub Cast__Tuple__to_SC_Identifier # function
+sub Cast_Tuple_to_SC_Identifier
 {
     my ($MDLL, $h_topic) = @_;
     # Expect $h to be a Tuple of 4 attributes.
@@ -1308,7 +1308,7 @@ sub Cast__Tuple__to_SC_Identifier # function
     ] );
 }
 
-sub Cast__SC_Identifier__to_Tuple # function
+sub Cast_SC_Identifier_to_Tuple
 {
     my ($MDLL, $h_topic) = @_;
     # Expect $h to be an SC_Identifier.

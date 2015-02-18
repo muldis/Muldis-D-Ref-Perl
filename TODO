@@ -4,9 +4,61 @@
 
 Following is a summary of things that still need doing.
 
+* Consider renaming Low_Level to Memory or such ... or Memory is distinct.
+
 * Never execute Muldis D stimulus response rules when compiling it unless
 the user explicitly passed a flag saying it was ok, for security, they may
 think it was just data by default.
+
+* Make the RefEng parser non-streaming, like with normal programming
+languages, and hence pure functional and more easily implementable higher
+level in Muldis D itself (once bootstrapped); leave streaming version to
+non-RefEng implementations, hence officially RefEng itself is no longer is
+required to have that kind of scalability.  It will be an interesting
+experiment for sure to express Muldis D parsing in terms of set or
+relational operations, such as first splitting the source Text into an
+array of one character each, and going from there, so the parsing
+essentially becomes a highly parallelizable set operation rather than
+serial, where possible, eg using relational join to map characters to
+character classes etc.  Or we can still do functional without all that,
+as recursive but based on tail-calls for optimizability.  We can do this
+with hyper-ops and arrays offset by single elements or relations with
+index/rank columns likewise, to easily do tests of character adjacency in a
+parallel fashion.  TODO, look for prior art.  Essentially the parser should
+just be several rounds of map-reduce-ish, eg an early round is tokenize
+simply into is-inside-quoted-string from is-outside-quoted-string.
+- Some of the operations are like edge-detection algorithms or image
+processing operations, such as find where adjacent elements meaningfully
+differ and focus on those rather than where adjacent are alike.  At
+different times, edges could be quote characters, or word/symbol
+boundaries, or bracketing characters, etc.
+- It is likely that by using relational operators for parsing or being
+essentially such map-reduce-like, we could actually generate a SQL version
+of the parser too, thus actually exploiting the parallelizable nature.
+
+* Forget not at compile time the conditional-run lazy semantics, possibly
+must break exprs into closures and only call when referenced, not in decl 
+order like reg var assign.
+- So its not just lvalue expressions that need special handling, but
+rvalue expressions too, though the latter are easier.
+- Possibly need state machine, slots for each sub-expr value or specific call 
+when ??!! encountered etc as such makes eval conditional.
+- Lexically have 2 hashes keyed on expr node names, one with subref of expr
+to run and other of memoized result from run.
+- Can be optimized / made smaller by link-time constant folding.
+- In particular any sub-expression which doesn't reference "topic" anywhere
+can be completely folded by link-time.
+
+* Make Low_Level work in a more C-like fashion for certain types and
+operations, particularly the String and Array types, such that a
+String/Array value is implemented possibly as a triple of
+pointer+offset+count, in particular intended for support of when a lot of
+substring or array slice operations are going on such as by a parser, so
+for example we don't keep re-copying arrays in order to do "tail"
+operations.  This needs to be balanced with the current approach of not
+acting so low-level, as often the old way is still better.  Of course, if
+Perl already works that way internally for strings due to it being
+copy-on-write, we can save ourself the effort, so lets look that up.
 
 * Only ship cross-compiled versions of standard Muldis D libraries with
 Muldis::D::RefEng, eg as a set of files with names like
@@ -14,6 +66,14 @@ lib/Muldis/D/RefEng/Compiled/Muldis_D/http_muldis_com__0_120_0/Stringy.pm
 for simplicity and performance.  The Muldis::D::RefEng::Compiled::*
 namespace is where all user-written Muldis D code is compiled to anyway for
 normal use.  Users can see Muldis-D-Standard distro for system lib sources.
+- ACTUALLY, shipping such pre-compiled Perl modules is a dubious proposition
+in practice since we still have to effectively include all the Muldis D
+source anyway either for introspection or link-time compilation purposes,
+and its questionable how much we can actually pre-compile easily.  So we
+just pre-compile what we need to bootstrap a Muldis D parser/compiler/etc,
+and then effectively that's just written by hand for RefEng anyway.
+- That also saves us having to think about having version-specific
+namespaces when distributing, and save such things for installation-only.
 
 * Make parser and compiler as simple as possible such that each one has
 practically zero knowledge of runtime issues such as the routine dispatch
