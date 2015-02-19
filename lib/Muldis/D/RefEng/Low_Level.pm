@@ -521,10 +521,11 @@ sub v_SC_Identifier
     #               or when +base, -ext, -levels, +path
     #     - relative : when -base, -ext, -levels, -path
     #               or when -base, -ext, +levels, +path
+    #               or when -base, -ext, +levels, -path
     #     - floating : when -base, -ext, -levels, +path
     # - For base,ext,path : + means nonempty, - means empty
     # - For levels        : + means nonzero , - means zero
-    # - The other 9 possible combos of SC_Identifier elems are illegal.
+    # - The other 8 possible combos of SC_Identifier elems are illegal.
     # - The relative val of 4x- means "self", is SC_Identifier default val.
     # - The identity subtype is the full declared name of the package
     #       actually linked in, not what was requested by users.
@@ -556,25 +557,26 @@ sub v_SC_Identifier
         # 4/16 combos
         confess q{illegal SC_Identifier};
     }
-    elsif (scalar @{$path_beneath_pkg})
-    {
-        # 2/16 combos
-        my $subtype = $rel_starts_n_lev_up != 0
-            ? $IDENT_ST_RELATIVE : $IDENT_ST_FLOATING;
-        my $serial = join q{.},
-            ($rel_starts_n_lev_up != 0 ? $rel_starts_n_lev_up : ()),
-            (map { _normalize_name_str($_) } @{$path_beneath_pkg});
-    }
-    elsif ($rel_starts_n_lev_up == 0)
+    elsif ($rel_starts_n_lev_up == 0 and !scalar @{$path_beneath_pkg})
     {
         # 1/16 combos
         # $subtype = $IDENT_ST_RELATIVE, $serial = '0'
         return $self_ident;
     }
+    elsif ($rel_starts_n_lev_up != 0)
+    {
+        # 2/16 combos
+        $subtype = $IDENT_ST_RELATIVE;
+        $serial = join q{.},
+            $rel_starts_n_lev_up,
+            (map { _normalize_name_str($_) } @{$path_beneath_pkg});
+    }
     else
     {
         # 1/16 combos
-        confess q{illegal SC_Identifier};
+        $subtype = $IDENT_ST_FLOATING;
+        $serial = join q{.},
+            (map { _normalize_name_str($_) } @{$path_beneath_pkg});
     }
 
     my $av = [$pkg_name_base, $pkg_name_ext, $rel_starts_n_lev_up,
